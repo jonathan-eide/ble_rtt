@@ -64,6 +64,7 @@
 #include "nrf_log_default_backends.h"
 
 #include "radio_002.h"
+#include "timeslot.h"
 
 
 #define ADVERTISING_LED                 BSP_BOARD_LED_0                         /**< Is on when device is advertising. */
