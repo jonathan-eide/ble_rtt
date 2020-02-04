@@ -63,6 +63,7 @@
 #include "nrf_log_default_backends.h"
 
 #include "radio_001.h"
+#include "timeslot.h"
 
 
 #define CENTRAL_SCANNING_LED            BSP_BOARD_LED_0                     /**< Scanning LED will be on when the device is scanning. */
@@ -179,9 +180,8 @@ static void lbs_c_evt_handler(ble_lbs_c_t * p_lbs_c, ble_lbs_c_evt_t * p_lbs_c_e
 /**@brief Function for handling BLE events.
  *
  * @param[in]   p_ble_evt   Bluetooth stack event.
- * @param[in]   p_context   Unused.
  */
-static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
+static void ble_evt_handler(ble_evt_t const * p_ble_evt)
 {
     ret_code_t err_code;
 
@@ -268,6 +268,20 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     }
 }
 
+/**@brief Function for dispatching a SoftDevice event to all modules with a SoftDevice 
+ *        event handler.
+ *
+ * @details This function is called from the SoftDevice event interrupt handler after a 
+ *          SoftDevice event has been received.
+ *
+ * @param[in] p_ble_evt  SoftDevice event.
+ * @param[in] p_context   Unused.
+ */
+static void ble_evt_dispatch(ble_evt_t const * p_ble_evt, void * p_context)
+{
+    ble_evt_handler(p_ble_evt);
+    nrf_evt_signal_handler((uint32_t) p_ble_evt->header.evt_id);
+}
 
 /**@brief LED Button client initialization.
  */
@@ -305,7 +319,7 @@ static void ble_stack_init(void)
     APP_ERROR_CHECK(err_code);
 
     // Register a handler for BLE events.
-    NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, ble_evt_handler, NULL);
+    NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, ble_evt_dispatch, NULL);
 }
 
 
@@ -360,8 +374,6 @@ static void scan_evt_handler(scan_evt_t const * p_scan_evt)
           break;
     }
 }
-
-
 
 /**@brief Function for initializing the button handler module.
  */
@@ -489,6 +501,8 @@ int main(void)
     db_discovery_init();
     lbs_c_init();
 
+    timeslot_sd_init();
+
     // Start execution.
     NRF_LOG_INFO("Blinky CENTRAL example started.");
     scan_start();
@@ -502,3 +516,8 @@ int main(void)
         idle_state_handle();
     }
 }
+
+
+// Source:
+// https://github.com/NordicPlayground/nrf51-ble-micro-esb-uart/blob/master/nRF5_SDK_11.0.0_89a8197/examples/ble_peripheral/ble_app_uart.ESB_Timeslot/main.c
+// https://devzone.nordicsemi.com/nordic/short-range-guides/b/software-development-kit/posts/setting-up-the-timeslot-api
