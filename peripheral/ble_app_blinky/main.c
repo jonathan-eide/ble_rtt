@@ -65,7 +65,6 @@
 
 #include "radio_002.h"
 
-
 #define ADVERTISING_LED                 BSP_BOARD_LED_0                         /**< Is on when device is advertising. */
 #define CONNECTED_LED                   BSP_BOARD_LED_1                         /**< Is on when device has connected. */
 #define LEDBUTTON_LED                   BSP_BOARD_LED_2                         /**< LED to be toggled with the help of the LED Button Service. */
@@ -266,8 +265,6 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
  */
 static void led_write_handler(uint16_t conn_handle, ble_lbs_t * p_lbs, uint8_t led_state)
 {
-    //do_rtt_measurement();
-
     if (led_state)
     {
         bsp_board_led_on(LEDBUTTON_LED);
@@ -479,6 +476,54 @@ static void ble_stack_init(void)
 }
 
 
+/**@brief Function for handling events from the button handler module.
+ *
+ * @param[in] pin_no        The pin that the event applies to.
+ * @param[in] button_action The button action (press/release).
+ */
+static void button_event_handler(uint8_t pin_no, uint8_t button_action)
+{
+    ret_code_t err_code;
+
+    switch (pin_no)
+    {
+        case LEDBUTTON_BUTTON:
+            NRF_LOG_INFO("Send button state change.");
+            err_code = ble_lbs_on_button_change(m_conn_handle, &m_lbs, button_action);
+            if (err_code != NRF_SUCCESS &&
+                err_code != BLE_ERROR_INVALID_CONN_HANDLE &&
+                err_code != NRF_ERROR_INVALID_STATE &&
+                err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)
+            {
+                APP_ERROR_CHECK(err_code);
+            }
+            break;
+
+        default:
+            APP_ERROR_HANDLER(pin_no);
+            break;
+    }
+}
+
+
+/**@brief Function for initializing the button handler module.
+ */
+static void buttons_init(void)
+{
+    ret_code_t err_code;
+
+    //The array must be static because a pointer to it will be saved in the button handler module.
+    static app_button_cfg_t buttons[] =
+    {
+        {LEDBUTTON_BUTTON, false, BUTTON_PULL, button_event_handler}
+    };
+
+    err_code = app_button_init(buttons, ARRAY_SIZE(buttons),
+                               BUTTON_DETECTION_DELAY);
+    APP_ERROR_CHECK(err_code);
+}
+
+
 static void log_init(void)
 {
     ret_code_t err_code = NRF_LOG_INIT(NULL);
@@ -519,6 +564,7 @@ int main(void)
     log_init();
     leds_init();
     timers_init();
+    buttons_init();
     power_management_init();
     ble_stack_init();
     gap_params_init();

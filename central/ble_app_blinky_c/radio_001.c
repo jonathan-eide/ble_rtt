@@ -23,8 +23,6 @@
  */
 
 #include "radio_001.h"
-#include "product.h"
-#include "timer.h"
 #include "app_util_platform.h"
 #include "nrf_gpio.h"
 #include "nrf_delay.h"
