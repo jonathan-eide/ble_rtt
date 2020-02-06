@@ -23,14 +23,12 @@
  */
 
 #include "radio_001.h"
-#include "product.h"
-#include "timer.h"
 #include "app_util_platform.h"
 #include "nrf_gpio.h"
 #include "nrf_delay.h"
 #include "boards.h"
 #include "app_error.h"
-#include <string.h>
+#include <stdbool.h>
 #include <stdio.h> 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -48,8 +46,6 @@
 #define NUMBER_OF_MEASUREMENTS NUM_BINS*10
 
 #define BLE2M
-
-#define CYAN 0x07FF /** Background color for ili9341 LCD display */
 
 static uint8_t test_frame[255] = {0x00, 0x04, 0xFF, 0xC1, 0xFB, 0xE8};
 
