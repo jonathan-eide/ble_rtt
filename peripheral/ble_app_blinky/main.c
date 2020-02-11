@@ -68,6 +68,7 @@
 
 #define ADVERTISING_LED                 BSP_BOARD_LED_0                         /**< Is on when device is advertising. */
 #define CONNECTED_LED                   BSP_BOARD_LED_1                         /**< Is on when device has connected. */
+#define LEDBUTTON_LED                   BSP_BOARD_LED_2                     /**< LED to indicate a change of state of the the Button characteristic on the peer. */
 
 #define DEVICE_NAME                     "Nordic_RTT"                         /**< Name of device. Will be included in the advertising data. */
 
@@ -262,18 +263,16 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
  */
 static void led_write_handler(uint16_t conn_handle, ble_lbs_t * p_lbs, uint8_t led_state)
 {
-    //do_rtt_measurement();
-
-    // if (led_state)
-    // {
-    //     bsp_board_led_on(LEDBUTTON_LED);
-    //     NRF_LOG_INFO("Received LED ON!");
-    // }
-    // else
-    // {
-    //     bsp_board_led_off(LEDBUTTON_LED);
-    //     NRF_LOG_INFO("Received LED OFF!");
-    // }
+    if (led_state)
+    {
+        bsp_board_led_on(LEDBUTTON_LED);
+        NRF_LOG_INFO("Received LED ON!");
+    }
+    else
+    {
+        bsp_board_led_off(LEDBUTTON_LED);
+        NRF_LOG_INFO("Received LED OFF!");
+    }
 }
 
 
