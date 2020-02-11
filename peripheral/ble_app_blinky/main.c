@@ -53,7 +53,6 @@
 #include "nrf_sdh_ble.h"
 #include "boards.h"
 #include "app_timer.h"
-#include "app_button.h"
 #include "ble_lbs.h"
 #include "nrf_ble_gatt.h"
 #include "nrf_ble_qwr.h"
@@ -69,8 +68,6 @@
 
 #define ADVERTISING_LED                 BSP_BOARD_LED_0                         /**< Is on when device is advertising. */
 #define CONNECTED_LED                   BSP_BOARD_LED_1                         /**< Is on when device has connected. */
-#define LEDBUTTON_LED                   BSP_BOARD_LED_2                         /**< LED to be toggled with the help of the LED Button Service. */
-#define LEDBUTTON_BUTTON                BSP_BUTTON_0                            /**< Button that will trigger the notification event with the LED Button Service */
 
 #define DEVICE_NAME                     "Nordic_RTT"                         /**< Name of device. Will be included in the advertising data. */
 
@@ -89,8 +86,6 @@
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(20000)                  /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (15 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(5000)                   /**< Time between each call to sd_ble_gap_conn_param_update after the first call (5 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT    3                                       /**< Number of attempts before giving up the connection parameter negotiation. */
-
-#define BUTTON_DETECTION_DELAY          APP_TIMER_TICKS(50)                     /**< Delay from a GPIOTE event until a button is reported as pushed (in number of timer ticks). */
 
 #define DEAD_BEEF                       0xDEADBEEF                              /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
 
@@ -269,16 +264,16 @@ static void led_write_handler(uint16_t conn_handle, ble_lbs_t * p_lbs, uint8_t l
 {
     //do_rtt_measurement();
 
-    if (led_state)
-    {
-        bsp_board_led_on(LEDBUTTON_LED);
-        NRF_LOG_INFO("Received LED ON!");
-    }
-    else
-    {
-        bsp_board_led_off(LEDBUTTON_LED);
-        NRF_LOG_INFO("Received LED OFF!");
-    }
+    // if (led_state)
+    // {
+    //     bsp_board_led_on(LEDBUTTON_LED);
+    //     NRF_LOG_INFO("Received LED ON!");
+    // }
+    // else
+    // {
+    //     bsp_board_led_off(LEDBUTTON_LED);
+    //     NRF_LOG_INFO("Received LED OFF!");
+    // }
 }
 
 
@@ -376,9 +371,8 @@ static void advertising_start(void)
 /**@brief Function for handling BLE events.
  *
  * @param[in]   p_ble_evt   Bluetooth stack event.
- * @param[in]   p_context   Unused.
  */
-static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
+static void ble_evt_handler(ble_evt_t const * p_ble_evt)
 {
     ret_code_t err_code;
 
@@ -391,16 +385,12 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
             APP_ERROR_CHECK(err_code);
-            err_code = app_button_enable();
-            APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
             NRF_LOG_INFO("Disconnected");
             bsp_board_led_off(CONNECTED_LED);
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
-            err_code = app_button_disable();
-            APP_ERROR_CHECK(err_code);
             advertising_start();
             break;
 
@@ -454,6 +444,21 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 }
 
 
+/**@brief Function for dispatching a SoftDevice event to all modules with a SoftDevice 
+ *        event handler.
+ *
+ * @details This function is called from the SoftDevice event interrupt handler after a 
+ *          SoftDevice event has been received.
+ *
+ * @param[in] p_ble_evt  SoftDevice event.
+ * @param[in] p_context   Unused.
+ */
+static void ble_evt_dispatch(ble_evt_t const * p_ble_evt, void * p_context)
+{
+    ble_evt_handler(p_ble_evt);
+    nrf_evt_signal_handler((uint32_t) p_ble_evt->header.evt_id);
+}
+
 /**@brief Function for initializing the BLE stack.
  *
  * @details Initializes the SoftDevice and the BLE event interrupt.
@@ -476,7 +481,7 @@ static void ble_stack_init(void)
     APP_ERROR_CHECK(err_code);
 
     // Register a handler for BLE events.
-    NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, ble_evt_handler, NULL);
+    NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, ble_evt_dispatch, NULL);
 }
 
 
@@ -527,6 +532,8 @@ int main(void)
     services_init();
     advertising_init();
     conn_params_init();
+
+    timeslot_sd_init();
 
     // Start execution.
     NRF_LOG_INFO("Blinky example started.");
