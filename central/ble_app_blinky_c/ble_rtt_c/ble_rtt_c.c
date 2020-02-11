@@ -38,13 +38,13 @@
  *
  */
 #include "sdk_common.h"
-#if NRF_MODULE_ENABLED(BLE_LBS_C)
+#if NRF_MODULE_ENABLED(BLE_RTT_C)
 
-#include "ble_lbs_c.h"
+#include "ble_rtt_c.h"
 #include "ble_db_discovery.h"
 #include "ble_types.h"
 #include "ble_gattc.h"
-#define NRF_LOG_MODULE_NAME ble_lbs_c
+#define NRF_LOG_MODULE_NAME ble_RTT_c
 #include "nrf_log.h"
 NRF_LOG_MODULE_REGISTER();
 

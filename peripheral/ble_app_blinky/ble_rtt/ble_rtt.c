@@ -38,8 +38,8 @@
  *
  */
 #include "sdk_common.h"
-#if NRF_MODULE_ENABLED(BLE_LBS)
-#include "ble_lbs.h"
+#if NRF_MODULE_ENABLED(BLE_RTT)
+#include "ble_rtt.h"
 #include "ble_srv_common.h"
 
 
@@ -98,26 +98,6 @@ uint32_t ble_lbs_init(ble_lbs_t * p_lbs, const ble_lbs_init_t * p_lbs_init)
     err_code = sd_ble_gatts_service_add(BLE_GATTS_SRVC_TYPE_PRIMARY, &ble_uuid, &p_lbs->service_handle);
     VERIFY_SUCCESS(err_code);
 
-    // Add Button characteristic.
-    memset(&add_char_params, 0, sizeof(add_char_params));
-    add_char_params.uuid              = LBS_UUID_BUTTON_CHAR;
-    add_char_params.uuid_type         = p_lbs->uuid_type;
-    add_char_params.init_len          = sizeof(uint8_t);
-    add_char_params.max_len           = sizeof(uint8_t);
-    add_char_params.char_props.read   = 1;
-    add_char_params.char_props.notify = 1;
-
-    add_char_params.read_access       = SEC_OPEN;
-    add_char_params.cccd_write_access = SEC_OPEN;
-
-    err_code = characteristic_add(p_lbs->service_handle,
-                                  &add_char_params,
-                                  &p_lbs->button_char_handles);
-    if (err_code != NRF_SUCCESS)
-    {
-        return err_code;
-    }
-
     // Add LED characteristic.
     memset(&add_char_params, 0, sizeof(add_char_params));
     add_char_params.uuid             = LBS_UUID_LED_CHAR;
@@ -133,18 +113,4 @@ uint32_t ble_lbs_init(ble_lbs_t * p_lbs, const ble_lbs_init_t * p_lbs_init)
     return characteristic_add(p_lbs->service_handle, &add_char_params, &p_lbs->led_char_handles);
 }
 
-
-uint32_t ble_lbs_on_button_change(uint16_t conn_handle, ble_lbs_t * p_lbs, uint8_t button_state)
-{
-    ble_gatts_hvx_params_t params;
-    uint16_t len = sizeof(button_state);
-
-    memset(&params, 0, sizeof(params));
-    params.type   = BLE_GATT_HVX_NOTIFICATION;
-    params.handle = p_lbs->button_char_handles.value_handle;
-    params.p_data = &button_state;
-    params.p_len  = &len;
-
-    return sd_ble_gatts_hvx(conn_handle, &params);
-}
 #endif // NRF_MODULE_ENABLED(BLE_LBS)

@@ -54,7 +54,7 @@
 #include "ble_advertising.h"
 #include "ble_conn_params.h"
 #include "ble_db_discovery.h"
-#include "ble_lbs_c.h"
+#include "ble_rtt_c.h"
 #include "nrf_ble_gatt.h"
 #include "nrf_ble_scan.h"
 

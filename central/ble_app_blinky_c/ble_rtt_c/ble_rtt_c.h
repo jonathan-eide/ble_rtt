@@ -58,8 +58,8 @@
  *          @endcode
  */
 
-#ifndef BLE_LBS_C_H__
-#define BLE_LBS_C_H__
+#ifndef BLE_RTT_C_H__
+#define BLE_RTT_C_H__
 
 #include <stdint.h>
 #include "ble.h"

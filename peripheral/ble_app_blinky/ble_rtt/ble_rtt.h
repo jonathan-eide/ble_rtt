@@ -65,8 +65,8 @@
  *          @endcode
  */
 
-#ifndef BLE_LBS_H__
-#define BLE_LBS_H__
+#ifndef BLE_RTT_H__
+#define BLE_RTT_H__
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -92,7 +92,6 @@ NRF_SDH_BLE_OBSERVER(_name ## _obs,                                             
 #define LBS_UUID_BASE        {0x23, 0xD1, 0xBC, 0xEA, 0x5F, 0x78, 0x23, 0x15, \
                               0xDE, 0xEF, 0x12, 0x12, 0x00, 0x00, 0x00, 0x00}
 #define LBS_UUID_SERVICE     0x1523
-#define LBS_UUID_BUTTON_CHAR 0x1524
 #define LBS_UUID_LED_CHAR    0x1525
 
 
@@ -140,22 +139,10 @@ uint32_t ble_lbs_init(ble_lbs_t * p_lbs, const ble_lbs_init_t * p_lbs_init);
  */
 void ble_lbs_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context);
 
-
-/**@brief Function for sending a button state notification.
- *
- ' @param[in] conn_handle   Handle of the peripheral connection to which the button state notification will be sent.
- * @param[in] p_lbs         LED Button Service structure.
- * @param[in] button_state  New button state.
- *
- * @retval NRF_SUCCESS If the notification was sent successfully. Otherwise, an error code is returned.
- */
-uint32_t ble_lbs_on_button_change(uint16_t conn_handle, ble_lbs_t * p_lbs, uint8_t button_state);
-
-
 #ifdef __cplusplus
 }
 #endif
 
-#endif // BLE_LBS_H__
+#endif // BLE_RTT_H__
 
 /** @} */
