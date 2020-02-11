@@ -61,7 +61,6 @@ SRC_FILES += \
   $(SDK_ROOT)/components/ble/nrf_ble_gatt/nrf_ble_gatt.c \
   $(SDK_ROOT)/components/ble/nrf_ble_qwr/nrf_ble_qwr.c \
   $(SDK_ROOT)/external/utf_converter/utf.c \
-  $(SDK_ROOT)/components/ble/ble_services/ble_lbs/ble_lbs.c \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh.c \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh_ble.c \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh_soc.c \
@@ -128,7 +127,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components \
   $(SDK_ROOT)/components/libraries/scheduler \
   $(SDK_ROOT)/components/libraries/cli \
-  $(SDK_ROOT)/components/ble/ble_services/ble_lbs \
   $(SDK_ROOT)/components/ble/ble_services/ble_hts \
   $(SDK_ROOT)/components/libraries/crc16 \
   $(SDK_ROOT)/components/nfc/t4t_parser/apdu \
@@ -181,7 +179,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/nfc/ndef/connection_handover/ep_oob_rec \
   $(SDK_ROOT)/external/segger_rtt \
   $(SDK_ROOT)/components/libraries/atomic_fifo \
-  $(SDK_ROOT)/components/ble/ble_services/ble_lbs_c \
   $(SDK_ROOT)/components/nfc/ndef/connection_handover/ble_pair_lib \
   $(SDK_ROOT)/components/libraries/crypto \
   $(SDK_ROOT)/components/ble/ble_racp \
@@ -291,8 +288,8 @@ flash: default
 
 # Flash softdevice
 flash_softdevice:
-	@echo Flashing: s140_nrf52_6.1.1_softdevice.hex
-	nrfjprog -f nrf52 --program $(SDK_ROOT)/components/softdevice/s140/hex/s140_nrf52_6.1.1_softdevice.hex --sectorerase
+	@echo Flashing: s140_nrf52_7.0.1_softdevice.hex
+	nrfjprog -f nrf52 --program $(SDK_ROOT)/components/softdevice/s140/hex/s140_nrf52_7.0.1_softdevice.hex --sectorerase
 	nrfjprog -f nrf52 --reset
 
 erase:
