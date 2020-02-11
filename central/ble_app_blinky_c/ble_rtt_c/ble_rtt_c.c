@@ -38,15 +38,10 @@
  *
  */
 #include "sdk_common.h"
-#if NRF_MODULE_ENABLED(BLE_RTT_C)
-
 #include "ble_rtt_c.h"
 #include "ble_db_discovery.h"
 #include "ble_types.h"
 #include "ble_gattc.h"
-#define NRF_LOG_MODULE_NAME ble_RTT_c
-#include "nrf_log.h"
-NRF_LOG_MODULE_REGISTER();
 
 #define WRITE_MESSAGE_LENGTH   BLE_CCCD_VALUE_LEN    /**< Length of the write message for CCCD. */
 
@@ -62,8 +57,6 @@ static void gatt_error_handler(uint32_t   nrf_error,
                                uint16_t   conn_handle)
 {
     ble_lbs_c_t * p_ble_lbs_c = (ble_lbs_c_t *)p_ctx;
-
-    NRF_LOG_DEBUG("A GATT Client error has occurred on conn_handle: 0X%X", conn_handle);
 
     if (p_ble_lbs_c->error_handler != NULL)
     {
@@ -156,7 +149,6 @@ void ble_lbs_on_db_disc_evt(ble_lbs_c_t * p_ble_lbs_c, ble_db_discovery_evt_t co
             }
         }
 
-        NRF_LOG_DEBUG("LED Button Service discovered at peer.");
         //If the instance was assigned prior to db_discovery, assign the db_handles
         if (p_ble_lbs_c->conn_handle != BLE_CONN_HANDLE_INVALID)
         {
@@ -240,10 +232,6 @@ void ble_lbs_c_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
  */
 static uint32_t cccd_configure(ble_lbs_c_t * p_ble_lbs_c, bool enable)
 {
-    NRF_LOG_DEBUG("Configuring CCCD. CCCD Handle = %d, Connection Handle = %d",
-                  p_ble_lbs_c->peer_lbs_db.button_cccd_handle,
-                  p_ble_lbs_c->conn_handle);
-
     nrf_ble_gq_req_t cccd_req;
     uint16_t         cccd_val = enable ? BLE_GATT_HVX_NOTIFICATION : 0;
     uint8_t          cccd[WRITE_MESSAGE_LENGTH];
@@ -287,8 +275,6 @@ uint32_t ble_lbs_led_status_send(ble_lbs_c_t * p_ble_lbs_c, uint8_t status)
         return NRF_ERROR_INVALID_STATE;
     }
 
-    NRF_LOG_DEBUG("Writing LED status 0x%x", status);
-
     nrf_ble_gq_req_t write_req;
 
     memset(&write_req, 0, sizeof(nrf_ble_gq_req_t));
@@ -318,5 +304,3 @@ uint32_t ble_lbs_c_handles_assign(ble_lbs_c_t    * p_ble_lbs_c,
     }
     return nrf_ble_gq_conn_handle_register(p_ble_lbs_c->p_gatt_queue, conn_handle);
 }
-
-#endif // NRF_MODULE_ENABLED(BLE_LBS_C)
