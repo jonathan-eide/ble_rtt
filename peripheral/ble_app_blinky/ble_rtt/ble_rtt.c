@@ -38,7 +38,6 @@
  *
  */
 #include "sdk_common.h"
-#if NRF_MODULE_ENABLED(BLE_RTT)
 #include "ble_rtt.h"
 #include "ble_srv_common.h"
 
@@ -112,5 +111,3 @@ uint32_t ble_lbs_init(ble_lbs_t * p_lbs, const ble_lbs_init_t * p_lbs_init)
 
     return characteristic_add(p_lbs->service_handle, &add_char_params, &p_lbs->led_char_handles);
 }
-
-#endif // NRF_MODULE_ENABLED(BLE_LBS)
