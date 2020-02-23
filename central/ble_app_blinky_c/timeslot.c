@@ -98,8 +98,6 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
             NRF_TIMER0->INTENSET = TIMER_INTENSET_COMPARE0_Msk;
             NRF_TIMER0->CC[0] = m_slot_length - 1000;
             NVIC_EnableIRQ(TIMER0_IRQn);   
-            
-            nrf_gpio_pin_toggle(20); //Toggle LED4
             break;
 
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_RADIO:
@@ -108,16 +106,16 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
             break;
 
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_TIMER0:
-            //Timer interrupt - do graceful shutdown - schedule next timeslot
-            configure_next_event_normal();
-            signal_callback_return_param.params.request.p_next = &m_timeslot_request;
-            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
+            //Timer interrupt - attempt to increase timeslot length
+            signal_callback_return_param.params.extend.length_us = m_slot_length;
+            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_EXTEND;
             break;
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_SUCCEEDED:
-            //No implementation needed
+            //Extension succeeded, reset timer(configurations still valid since slot length is the same)
+            NRF_TIMER0->TASKS_CLEAR = 1;
             break;
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_FAILED:
-            //Try scheduling a new timeslot
+            //Extension failed, schedule new timeslot at earliest time
             configure_next_event_earliest();
             signal_callback_return_param.params.request.p_next = &m_timeslot_request;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
@@ -136,12 +134,12 @@ uint32_t timeslot_sd_init(void)
 {
     uint32_t err_code;
     
-    err_code = sd_radio_session_open(radio_callback);
+    err_code = sd_radio_session_open(&radio_callback);
     if (err_code != NRF_SUCCESS)
     {
         return err_code;
     }
-    
+
     err_code = request_next_event_earliest();
     if (err_code != NRF_SUCCESS)
     {
