@@ -167,19 +167,6 @@ static void lbs_c_evt_handler(ble_lbs_c_t * p_lbs_c, ble_lbs_c_evt_t * p_lbs_c_e
             APP_ERROR_CHECK(err_code);
         } break; // BLE_LBS_C_EVT_DISCOVERY_COMPLETE
 
-        case BLE_LBS_C_EVT_BUTTON_NOTIFICATION:
-        {
-            NRF_LOG_INFO("Button state changed on peer to 0x%x.", p_lbs_c_evt->params.button.button_state);
-            if (p_lbs_c_evt->params.button.button_state)
-            {
-                bsp_board_led_on(LEDBUTTON_LED);
-            }
-            else
-            {
-                bsp_board_led_off(LEDBUTTON_LED);
-            }
-        } break; // BLE_LBS_C_EVT_BUTTON_NOTIFICATION
-
         default:
             // No implementation needed.
             break;
@@ -364,6 +351,8 @@ static void button_event_handler(uint8_t pin_no, uint8_t button_action)
             APP_ERROR_HANDLER(pin_no);
             break;
     }
+
+    request_next_event_earliest();
 }
 
 
