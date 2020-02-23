@@ -351,8 +351,6 @@ static void button_event_handler(uint8_t pin_no, uint8_t button_action)
             APP_ERROR_HANDLER(pin_no);
             break;
     }
-
-    request_next_event_earliest();
 }
 
 
