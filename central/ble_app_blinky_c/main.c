@@ -94,6 +94,7 @@ NRF_BLE_GQ_DEF(m_ble_gatt_queue,                                /**< BLE GATT Qu
 
 static char const m_target_periph_name[] = "Nordic_RTT";     /**< Name of the device we try to connect to. This name is searched in the scan report data*/
 
+uint32_t ts_time_total = 0;
 
 /**@brief Function to handle asserts in the SoftDevice.
  *
@@ -351,6 +352,7 @@ static void button_event_handler(uint8_t pin_no, uint8_t button_action)
             APP_ERROR_HANDLER(pin_no);
             break;
     }
+    request_next_event_earliest();
 }
 
 
@@ -492,6 +494,50 @@ static void idle_state_handle(void)
     nrf_pwr_mgmt_run();
 }
 
+static void ts_measure_timer_init(void)
+{
+    NRF_TIMER2->PRESCALER = 4;
+    NRF_TIMER2->BITMODE = TIMER_BITMODE_BITMODE_32Bit << TIMER_BITMODE_BITMODE_Pos;
+    NRF_TIMER2->CC[1] = 1000000;
+    NRF_TIMER2->INTENSET = TIMER_INTENSET_COMPARE1_Msk;
+    NRF_TIMER2->SHORTS = TIMER_SHORTS_COMPARE1_CLEAR_Msk;
+    NRF_TIMER2->TASKS_START = 1;
+    NVIC_SetPriority(TIMER2_IRQn, 7);
+    NVIC_EnableIRQ(TIMER2_IRQn);
+}
+
+// The timer interrupt will fire every second, and show how much time was spent in the timeslot since the last update
+void TIMER2_IRQHandler(void)
+{
+    if(NRF_TIMER2->EVENTS_COMPARE[1])
+    {
+        NRF_TIMER2->EVENTS_COMPARE[1] = 0;
+
+        NRF_LOG_INFO("Time in timeslot: %i ", ts_time_total);
+        ts_time_total = 0;
+    }
+}
+
+// The current value of TIMER2 will be stored in CC[2], for use later
+static void timeslot_start(void)
+{
+    NRF_TIMER2->TASKS_CAPTURE[2] = 1;
+}
+
+// The current value in the timer will be stored in CC[3], and the difference between CC[3] and CC[2] will be added to ts_time_total
+static void timeslot_end(void)
+{
+    NRF_TIMER2->TASKS_CAPTURE[3] = 1;
+    if(NRF_TIMER2->CC[2] < NRF_TIMER2->CC[3])
+    {
+        ts_time_total = (NRF_TIMER2->CC[3] - NRF_TIMER2->CC[2]);
+    }
+    else
+    {
+        ts_time_total = (1000000 + NRF_TIMER2->CC[3] - NRF_TIMER2->CC[2]);
+    }
+}
+
 
 int main(void)
 {
@@ -507,11 +553,14 @@ int main(void)
     db_discovery_init();
     lbs_c_init();
 
-    timeslot_sd_init();
+    timeslot_sd_init(timeslot_start, timeslot_end);
 
     // Start execution.
     NRF_LOG_INFO("Blinky CENTRAL example started.");
     scan_start();
+
+    // Start timeslot time measuring
+    ts_measure_timer_init();
 
     // Turn on the LED to signal scanning.
     bsp_board_led_on(CENTRAL_SCANNING_LED);

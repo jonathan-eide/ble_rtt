@@ -11,9 +11,18 @@
 
 #define TS_TOT_EXT_LENGTH_US    (1000000UL) /* Desired total timeslot length */
 #define TS_LEN_US               (10000UL)   /* Initial timeslot length */
-#define TX_LEN_EXTENSION_US     (10000UL)   /* Extension timeslot length */
+#define TS_LEN_EXTENSION_US     (10000UL)   /* Extension timeslot length */
 #define TS_SAFETY_MARGIN_US     (250UL)     /* The timeslot activity should be finished with this much to spare. */
 #define TS_EXTEND_MARGIN_US     (500UL)     /* The timeslot activity should request an extension this long before end of timeslot. */
+
+#define TS_CALLBACK_EGU             NRF_EGU3
+#define TS_CALLBACK_EGU_IRQn        SWI3_EGU3_IRQn
+#define TS_CALLBACK_EGU_IRQHandler  SWI3_EGU3_IRQHandler
+#define TS_EGU_CALLBACK_START_INDEX 0
+#define TS_EGU_CALLBACK_END_INDEX   1
+
+typedef void (*ts_started_callback)(void);
+typedef void (*ts_stopped_callback)(void);
 
 /**@brief Radio event handler
 */
@@ -47,7 +56,7 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type);
 
 /**@brief Function for initializing the timeslot API.
  */
-uint32_t timeslot_sd_init(void);
+uint32_t timeslot_sd_init(ts_started_callback started_cb, ts_stopped_callback stopped_cb);
 
 
 #endif

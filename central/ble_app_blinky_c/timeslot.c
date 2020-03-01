@@ -7,6 +7,9 @@
 #include "nrf_sdh_ble.h"
 #include "nrf_sdh_soc.h"
 #include "boards.h"
+#include "timeslot.h"
+#include "nrf_error.h"
+#include "nrf_sdm.h"
 
 /* Constants for timeslot API */
 static nrf_radio_request_t  m_timeslot_request;
@@ -14,6 +17,9 @@ static uint32_t             m_slot_length;
 static uint32_t             m_total_timeslot_length = 0;
 
 static nrf_radio_signal_callback_return_param_t signal_callback_return_param;
+
+static ts_started_callback m_ts_started_cb;
+static ts_stopped_callback m_ts_stopped_cb;
 
 /**@brief Request next timeslot event in earliest configuration
  */
@@ -24,7 +30,7 @@ uint32_t request_next_event_earliest(void)
     m_timeslot_request.params.earliest.hfclk       = NRF_RADIO_HFCLK_CFG_XTAL_GUARANTEED;
     m_timeslot_request.params.earliest.priority    = NRF_RADIO_PRIORITY_HIGH;
     m_timeslot_request.params.earliest.length_us   = m_slot_length;
-    m_timeslot_request.params.earliest.timeout_us  = 1000000;
+    m_timeslot_request.params.earliest.timeout_us  = NRF_RADIO_EARLIEST_TIMEOUT_MAX_US;
     return sd_radio_request(&m_timeslot_request);
 }
 
@@ -33,12 +39,12 @@ uint32_t request_next_event_earliest(void)
  */
 void configure_next_event_earliest(void)
 {
-    m_slot_length                                  = TX_LEN_EXTENSION_US;
+    m_slot_length                                  = TS_LEN_EXTENSION_US;
     m_timeslot_request.request_type                = NRF_RADIO_REQ_TYPE_EARLIEST;
     m_timeslot_request.params.earliest.hfclk       = NRF_RADIO_HFCLK_CFG_XTAL_GUARANTEED;
     m_timeslot_request.params.earliest.priority    = NRF_RADIO_PRIORITY_HIGH;
     m_timeslot_request.params.earliest.length_us   = m_slot_length;
-    m_timeslot_request.params.earliest.timeout_us  = 1000000;
+    m_timeslot_request.params.earliest.timeout_us  = NRF_RADIO_EARLIEST_TIMEOUT_MAX_US;
 }
 
 /**@brief Timeslot signal handler
@@ -97,6 +103,9 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
             
             signal_callback_return_param.params.request.p_next = NULL;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+
+            // Trigger the timeslot started callback
+            TS_CALLBACK_EGU->TASKS_TRIGGER[TS_EGU_CALLBACK_START_INDEX] = 1;
             break;
 
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_RADIO:
@@ -109,6 +118,8 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
             if (NRF_TIMER0->EVENTS_COMPARE[0] &&
                (NRF_TIMER0->INTENSET & (TIMER_INTENSET_COMPARE0_Enabled << TIMER_INTENCLR_COMPARE0_Pos)))
             {
+                m_timeslot_request.params.earliest.length_us   = TS_LEN_US;
+                m_slot_length                                  = TS_LEN_US;
                 bsp_board_led_off(2);
                 NRF_TIMER0->TASKS_STOP  = 1;
                 NRF_TIMER0->EVENTS_COMPARE[0] = 0;
@@ -117,18 +128,24 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
                 // Schedule next timeslot
                 signal_callback_return_param.params.request.p_next = &m_timeslot_request;
                 signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
+
+                // Trigger the timeslot ended callback
+                TS_CALLBACK_EGU->TASKS_TRIGGER[TS_EGU_CALLBACK_END_INDEX] = 1;
             }
             else if (NRF_TIMER0->EVENTS_COMPARE[1] &&
                (NRF_TIMER0->INTENSET & (TIMER_INTENSET_COMPARE1_Enabled << TIMER_INTENCLR_COMPARE1_Pos)))
             {
+                m_timeslot_request.params.earliest.length_us   = TS_LEN_EXTENSION_US;
+                m_slot_length                                  = TS_LEN_EXTENSION_US;
+                configure_next_event_earliest();
                 NRF_TIMER0->EVENTS_COMPARE[1] = 0;
                 (void)NRF_TIMER0->EVENTS_COMPARE[1];
             
                 // This is the "try to extend timeslot" timeout
-                if (m_total_timeslot_length < (TS_TOT_EXT_LENGTH_US - 5000UL - TX_LEN_EXTENSION_US))
+                if (m_total_timeslot_length < (TS_TOT_EXT_LENGTH_US - 5000UL - TS_LEN_EXTENSION_US))
                 {
                     // Request timeslot extension if total length does not exceed TS_TOT_EXT_LENGTH_US
-                    signal_callback_return_param.params.extend.length_us = TX_LEN_EXTENSION_US;
+                    signal_callback_return_param.params.extend.length_us = TS_LEN_EXTENSION_US;
                     signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_EXTEND;
                 }
             }
@@ -146,12 +163,12 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
             NRF_TIMER0->TASKS_STOP          = 1;
             NRF_TIMER0->EVENTS_COMPARE[0]   = 0;
             NRF_TIMER0->EVENTS_COMPARE[1]   = 0;
-            NRF_TIMER0->CC[0]               += (TX_LEN_EXTENSION_US - 25);
-            NRF_TIMER0->CC[1]               += (TX_LEN_EXTENSION_US - 25);
+            NRF_TIMER0->CC[0]               += (TS_LEN_EXTENSION_US - 25);
+            NRF_TIMER0->CC[1]               += (TS_LEN_EXTENSION_US - 25);
             NRF_TIMER0->TASKS_START         = 1;
     
             // Keep track of total length
-            m_total_timeslot_length += TX_LEN_EXTENSION_US;
+            m_total_timeslot_length += TS_LEN_EXTENSION_US;
             
             signal_callback_return_param.params.request.p_next = NULL;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
@@ -171,11 +188,18 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
 
 /**@brief Function for initializing the timeslot API.
  */
-uint32_t timeslot_sd_init(void)
+uint32_t timeslot_sd_init(ts_started_callback started_cb, ts_stopped_callback stopped_cb)
 {
     uint32_t err_code;
+
+    m_ts_started_cb = started_cb;
+    m_ts_stopped_cb = stopped_cb;
+
+    TS_CALLBACK_EGU->INTENSET = (1 << TS_EGU_CALLBACK_START_INDEX) | (1 << TS_EGU_CALLBACK_END_INDEX);
+    NVIC_SetPriority(TS_CALLBACK_EGU_IRQn, 7);
+    NVIC_EnableIRQ(TS_CALLBACK_EGU_IRQn);
     
-    err_code = sd_radio_session_open(&radio_callback);
+    err_code = sd_radio_session_open(radio_callback);
     if (err_code != NRF_SUCCESS)
     {
         return err_code;
@@ -184,8 +208,34 @@ uint32_t timeslot_sd_init(void)
     err_code = request_next_event_earliest();
     if (err_code != NRF_SUCCESS)
     {
-        (void)sd_radio_session_close();
         return err_code;
     }
+
     return NRF_SUCCESS;
 }
+
+void TS_CALLBACK_EGU_IRQHandler(void)
+{
+    if(TS_CALLBACK_EGU->EVENTS_TRIGGERED[TS_EGU_CALLBACK_START_INDEX])
+    {
+        TS_CALLBACK_EGU->EVENTS_TRIGGERED[TS_EGU_CALLBACK_START_INDEX] = 0;
+        
+        if(m_ts_started_cb)
+        {
+            m_ts_started_cb();
+        }
+    }
+
+    if(TS_CALLBACK_EGU->EVENTS_TRIGGERED[TS_EGU_CALLBACK_END_INDEX])
+    {
+        TS_CALLBACK_EGU->EVENTS_TRIGGERED[TS_EGU_CALLBACK_END_INDEX] = 0;
+        
+        if(m_ts_stopped_cb)
+        {
+            m_ts_stopped_cb();
+        }
+    }
+}
+
+// Source:
+// https://devzone.nordicsemi.com/f/nordic-q-a/33392/need-help-with-timeslot-extensions
