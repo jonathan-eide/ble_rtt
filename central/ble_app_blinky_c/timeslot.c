@@ -8,10 +8,10 @@
 #include "nrf_sdh_soc.h"
 #include "boards.h"
 
-/**Constants for timeslot API
-*/
+/* Constants for timeslot API */
 static nrf_radio_request_t  m_timeslot_request;
 static uint32_t             m_slot_length;
+static uint32_t             m_total_timeslot_length = 0;
 
 static nrf_radio_signal_callback_return_param_t signal_callback_return_param;
 
@@ -19,10 +19,10 @@ static nrf_radio_signal_callback_return_param_t signal_callback_return_param;
  */
 uint32_t request_next_event_earliest(void)
 {
-    m_slot_length                                  = 15000;
+    m_slot_length                                  = TS_LEN_US;
     m_timeslot_request.request_type                = NRF_RADIO_REQ_TYPE_EARLIEST;
     m_timeslot_request.params.earliest.hfclk       = NRF_RADIO_HFCLK_CFG_XTAL_GUARANTEED;
-    m_timeslot_request.params.earliest.priority    = NRF_RADIO_PRIORITY_NORMAL;
+    m_timeslot_request.params.earliest.priority    = NRF_RADIO_PRIORITY_HIGH;
     m_timeslot_request.params.earliest.length_us   = m_slot_length;
     m_timeslot_request.params.earliest.timeout_us  = 1000000;
     return sd_radio_request(&m_timeslot_request);
@@ -33,27 +33,13 @@ uint32_t request_next_event_earliest(void)
  */
 void configure_next_event_earliest(void)
 {
-    m_slot_length                                  = 15000;
+    m_slot_length                                  = TX_LEN_EXTENSION_US;
     m_timeslot_request.request_type                = NRF_RADIO_REQ_TYPE_EARLIEST;
     m_timeslot_request.params.earliest.hfclk       = NRF_RADIO_HFCLK_CFG_XTAL_GUARANTEED;
-    m_timeslot_request.params.earliest.priority    = NRF_RADIO_PRIORITY_NORMAL;
+    m_timeslot_request.params.earliest.priority    = NRF_RADIO_PRIORITY_HIGH;
     m_timeslot_request.params.earliest.length_us   = m_slot_length;
     m_timeslot_request.params.earliest.timeout_us  = 1000000;
 }
-
-
-/**@brief Configure next timeslot event in normal configuration
- */
-void configure_next_event_normal(void)
-{
-    m_slot_length                                 = 15000;
-    m_timeslot_request.request_type               = NRF_RADIO_REQ_TYPE_NORMAL;
-    m_timeslot_request.params.normal.hfclk        = NRF_RADIO_HFCLK_CFG_XTAL_GUARANTEED;
-    m_timeslot_request.params.normal.priority     = NRF_RADIO_PRIORITY_HIGH;
-    m_timeslot_request.params.normal.distance_us  = 100000;
-    m_timeslot_request.params.normal.length_us    = m_slot_length;
-}
-
 
 /**@brief Timeslot signal handler
  */
@@ -83,7 +69,6 @@ void nrf_evt_signal_handler(uint32_t evt_id)
     }
 }
 
-
 /**@brief Timeslot event handler
  */
 nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
@@ -91,34 +76,90 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
     switch(signal_type)
     {
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_START:
-            //Start of the timeslot - set up timer interrupt
+            // TIMER0 is pre-configured for 1Mhz.
+            NRF_TIMER0->TASKS_STOP          = 1;
+            NRF_TIMER0->TASKS_CLEAR         = 1;
+            NRF_TIMER0->MODE                = (TIMER_MODE_MODE_Timer << TIMER_MODE_MODE_Pos);
+            NRF_TIMER0->EVENTS_COMPARE[0]   = 0;
+            NRF_TIMER0->EVENTS_COMPARE[1]   = 0;
+    
+            NRF_TIMER0->INTENSET = (TIMER_INTENSET_COMPARE0_Set << TIMER_INTENSET_COMPARE0_Pos) | 
+                                   (TIMER_INTENSET_COMPARE1_Set << TIMER_INTENSET_COMPARE1_Pos);
+
+            NRF_TIMER0->CC[0]               = (TS_LEN_US - TS_SAFETY_MARGIN_US);
+            NRF_TIMER0->CC[1]               = (TS_LEN_US - TS_EXTEND_MARGIN_US);
+            NRF_TIMER0->BITMODE             = (TIMER_BITMODE_BITMODE_24Bit << TIMER_BITMODE_BITMODE_Pos);
+            NRF_TIMER0->TASKS_START         = 1;
+    
+            NVIC_EnableIRQ(TIMER0_IRQn);
+        
+            m_total_timeslot_length = 0;
+            
             signal_callback_return_param.params.request.p_next = NULL;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
-            
-            NRF_TIMER0->INTENSET = TIMER_INTENSET_COMPARE0_Msk;
-            NRF_TIMER0->CC[0] = m_slot_length - 1000;
-            NVIC_EnableIRQ(TIMER0_IRQn);   
             break;
 
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_RADIO:
+            // Don't do anything
             signal_callback_return_param.params.request.p_next = NULL;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
             break;
 
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_TIMER0:
-            //Timer interrupt - attempt to increase timeslot length
-            signal_callback_return_param.params.extend.length_us = m_slot_length;
-            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_EXTEND;
+            if (NRF_TIMER0->EVENTS_COMPARE[0] &&
+               (NRF_TIMER0->INTENSET & (TIMER_INTENSET_COMPARE0_Enabled << TIMER_INTENCLR_COMPARE0_Pos)))
+            {
+                bsp_board_led_off(2);
+                NRF_TIMER0->TASKS_STOP  = 1;
+                NRF_TIMER0->EVENTS_COMPARE[0] = 0;
+                (void)NRF_TIMER0->EVENTS_COMPARE[0];
+            
+                // Schedule next timeslot
+                signal_callback_return_param.params.request.p_next = &m_timeslot_request;
+                signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
+            }
+            else if (NRF_TIMER0->EVENTS_COMPARE[1] &&
+               (NRF_TIMER0->INTENSET & (TIMER_INTENSET_COMPARE1_Enabled << TIMER_INTENCLR_COMPARE1_Pos)))
+            {
+                NRF_TIMER0->EVENTS_COMPARE[1] = 0;
+                (void)NRF_TIMER0->EVENTS_COMPARE[1];
+            
+                // This is the "try to extend timeslot" timeout
+                if (m_total_timeslot_length < (TS_TOT_EXT_LENGTH_US - 5000UL - TX_LEN_EXTENSION_US))
+                {
+                    // Request timeslot extension if total length does not exceed TS_TOT_EXT_LENGTH_US
+                    signal_callback_return_param.params.extend.length_us = TX_LEN_EXTENSION_US;
+                    signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_EXTEND;
+                }
+            }
+            else
+            {
+                signal_callback_return_param.params.request.p_next = NULL;
+                signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+            }
+            
             break;
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_SUCCEEDED:
-            //Extension succeeded, reset timer(configurations still valid since slot length is the same)
-            NRF_TIMER0->TASKS_CLEAR = 1;
+            bsp_board_led_on(2);
+
+            // Extension succeeded: update timer
+            NRF_TIMER0->TASKS_STOP          = 1;
+            NRF_TIMER0->EVENTS_COMPARE[0]   = 0;
+            NRF_TIMER0->EVENTS_COMPARE[1]   = 0;
+            NRF_TIMER0->CC[0]               += (TX_LEN_EXTENSION_US - 25);
+            NRF_TIMER0->CC[1]               += (TX_LEN_EXTENSION_US - 25);
+            NRF_TIMER0->TASKS_START         = 1;
+    
+            // Keep track of total length
+            m_total_timeslot_length += TX_LEN_EXTENSION_US;
+            
+            signal_callback_return_param.params.request.p_next = NULL;
+            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
             break;
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_FAILED:
-            //Extension failed, schedule new timeslot at earliest time
-            configure_next_event_earliest();
-            signal_callback_return_param.params.request.p_next = &m_timeslot_request;
-            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
+            // Don't do anything. The timer will expire before timeslot ends.
+            signal_callback_return_param.params.request.p_next = NULL;
+            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
             break;
         default:
             //No implementation needed
