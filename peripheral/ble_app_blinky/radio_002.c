@@ -125,9 +125,6 @@ void do_rtt_measurement(void)
     while (NRF_CLOCK->EVENTS_HFCLKSTARTED == 0)
     {
     }
-    
-    /* Configure the timer with prescaler 8,  counts every 256 cycle of timer clock (16MHz) */
-    // timer0_capture_init(8); 
   
     nrf_radio_init();
     setup_leds();
