@@ -105,6 +105,22 @@ void nrf_radio_init(void)
     NRF_RADIO->TXPOWER=0x0;
 }
 
+void timer0_capture_init(uint32_t prescaler)
+{
+    NRF_TIMER0->MODE = TIMER_MODE_MODE_Timer;
+    NRF_TIMER0->BITMODE = (TIMER_BITMODE_BITMODE_32Bit << TIMER_BITMODE_BITMODE_Pos);
+    NRF_TIMER0->TASKS_STOP = 1;
+    NRF_TIMER0->CC[0] = 0x0000;
+    NRF_TIMER0->EVENTS_COMPARE[0] = 0;
+    NRF_TIMER0->EVENTS_COMPARE[1] = 0;
+    NRF_TIMER0->EVENTS_COMPARE[2] = 0;
+    NRF_TIMER0->EVENTS_COMPARE[3] = 0;
+    NRF_TIMER0->TASKS_CLEAR = 1;
+    NRF_TIMER0->SHORTS = 0;
+    NRF_TIMER0->PRESCALER = prescaler << TIMER_PRESCALER_PRESCALER_Pos;
+    NRF_TIMER0->TASKS_CLEAR = 1;
+}
+
 /**
  * @brief Setting up LEDs used for inication packet received or sent
  */
@@ -176,7 +192,7 @@ void do_rtt_measurement(void)
     }
 
     /* Configure the timer with prescaler 0, counts every 1 cycle of timer clock (16MHz) */
-    //timer0_capture_init(0); 
+    timer0_capture_init(0); 
 
     nrf_radio_init();
     NRF_CLOCK->TASKS_HFCLKSTART = 1; /* Start HFCLK */
