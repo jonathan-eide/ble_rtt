@@ -29,17 +29,10 @@
 #include "nrf52.h"
 #include "nrf52_bitfields.h"
 
-#define DBG_PIN0    (28)
-#define DBG_PIN1    (29)
-#define DBG_PIN2    (30)
-#define DBG_PIN3    (31)
-
 #define NRF_GPIO NRF_P0
 
 #define GPIO_NUMBER_LED0 13 /** LED for packet received */
 #define GPIO_NUMBER_LED1 14 /** LED for packet sent */
-#define GPIO_NUMBER_LED3 16
-#define TRXWAIT 4 /** Inserted turnaround latency x 16us */
 
 #define BLE2M
 
@@ -106,19 +99,11 @@ void setup_leds()
     (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) | \
     (GPIO_PIN_CNF_INPUT_Connect << GPIO_PIN_CNF_INPUT_Pos) | \
     (GPIO_PIN_CNF_DIR_Output << GPIO_PIN_CNF_DIR_Pos));
-
-    NRF_GPIO->PIN_CNF[GPIO_NUMBER_LED3] = \
-    ((GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) | \
-    (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) | \
-    (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) | \
-    (GPIO_PIN_CNF_INPUT_Connect << GPIO_PIN_CNF_INPUT_Pos) | \
-    (GPIO_PIN_CNF_DIR_Output << GPIO_PIN_CNF_DIR_Pos));
 }
 
 void do_rtt_measurement(void)
 {
     volatile  uint32_t i;
-    NRF_GPIO->OUTSET = 1 << GPIO_NUMBER_LED3;
     /* Start HFXO */
     NRF_CLOCK->EVENTS_HFCLKSTARTED = 0;
     NRF_CLOCK->TASKS_HFCLKSTART = 1;
@@ -135,7 +120,6 @@ void do_rtt_measurement(void)
   
     while (true)
     {
-
         NRF_GPIO->OUTCLR = 1 << GPIO_NUMBER_LED0;  /* Rx LED On */
         NRF_GPIO->OUTSET = 1 << GPIO_NUMBER_LED1;  /* Tx LED Off */
 
@@ -164,7 +148,6 @@ void do_rtt_measurement(void)
             for(i=2;i<4;i++)
                 response_test_frame[i]=0;
         }
-        
         
         /* Switch to Tx asap and send response packet back to initiator */
         NRF_RADIO->PACKETPTR = (uint32_t)response_test_frame; /* Switch to tx buffer */
