@@ -11,6 +11,10 @@
 #include "nrf_error.h"
 #include "nrf_sdm.h"
 
+#define DATAPIN_1 NRF_GPIO_PIN_MAP(1, 3)
+#define DATAPIN_2 NRF_GPIO_PIN_MAP(1, 1)
+#define DATAPIN_3 NRF_GPIO_PIN_MAP(1, 10)
+
 /* Constants for timeslot API */
 static nrf_radio_request_t  m_timeslot_request;
 static uint32_t             m_slot_length;
@@ -82,6 +86,7 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
     switch(signal_type)
     {
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_START:
+            nrf_gpio_pin_set(DATAPIN_1);
             // TIMER0 is pre-configured for 1Mhz.
             NRF_TIMER0->TASKS_STOP          = 1;
             NRF_TIMER0->TASKS_CLEAR         = 1;
@@ -131,6 +136,7 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
 
                 // Trigger the timeslot ended callback
                 TS_CALLBACK_EGU->TASKS_TRIGGER[TS_EGU_CALLBACK_END_INDEX] = 1;
+                nrf_gpio_pin_clear(DATAPIN_1);
             }
             else if (NRF_TIMER0->EVENTS_COMPARE[1] &&
                (NRF_TIMER0->INTENSET & (TIMER_INTENSET_COMPARE1_Enabled << TIMER_INTENCLR_COMPARE1_Pos)))
@@ -148,6 +154,8 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
                     signal_callback_return_param.params.extend.length_us = TS_LEN_EXTENSION_US;
                     signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_EXTEND;
                 }
+                nrf_gpio_pin_set(DATAPIN_2);
+                nrf_gpio_pin_set(DATAPIN_3);
             }
             else
             {
@@ -172,11 +180,13 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
             
             signal_callback_return_param.params.request.p_next = NULL;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+            nrf_gpio_pin_clear(DATAPIN_3);
             break;
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_FAILED:
             // Don't do anything. The timer will expire before timeslot ends.
             signal_callback_return_param.params.request.p_next = NULL;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+            nrf_gpio_pin_clear(DATAPIN_2);
             break;
         default:
             //No implementation needed
@@ -208,6 +218,7 @@ uint32_t timeslot_sd_init(ts_started_callback started_cb, ts_stopped_callback st
     err_code = request_next_event_earliest();
     if (err_code != NRF_SUCCESS)
     {
+        (void)sd_radio_session_close();
         return err_code;
     }
 
