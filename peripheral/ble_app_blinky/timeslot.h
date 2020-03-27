@@ -9,6 +9,12 @@
 #include "nrf_sdh_soc.h"
 #include "boards.h"
 
+#define TS_TOT_EXT_LENGTH_US    (1000000UL) /* Desired total timeslot length */
+#define TS_LEN_US               (20000UL)   /* Initial timeslot length */
+#define TS_LEN_EXTENSION_US     (20000UL)   /* Extension timeslot length */
+#define TS_SAFETY_MARGIN_US     (250UL)     /* The timeslot activity should be finished with this much to spare. */
+#define TS_EXTEND_MARGIN_US     (500UL)     /* The timeslot activity should request an extension this long before end of timeslot. */
+
 /**@brief Radio event handler
 */
 void RADIO_timeslot_IRQHandler(void);
@@ -41,7 +47,7 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type);
 
 /**@brief Function for initializing the timeslot API.
  */
-uint32_t timeslot_sd_init(void);
+uint32_t timeslot_sd_init();
 
 
 #endif
