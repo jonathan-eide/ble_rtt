@@ -127,7 +127,8 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
                 // Schedule next timeslot
                 signal_callback_return_param.params.request.p_next = &m_timeslot_request;
                 signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
-                
+
+                TIMESLOT_END_EGU->TASKS_TRIGGER[0] = 1;
                 nrf_gpio_pin_clear(DATAPIN_1);
             }
             else if (NRF_TIMER0->EVENTS_COMPARE[1] &&
@@ -145,8 +146,9 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
                     // Request timeslot extension if total length does not exceed TS_TOT_EXT_LENGTH_US
                     signal_callback_return_param.params.extend.length_us = TS_LEN_EXTENSION_US;
                     signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_EXTEND;
-                    nrf_gpio_pin_set(DATAPIN_3);
                 }
+                nrf_gpio_pin_set(DATAPIN_2);
+                nrf_gpio_pin_set(DATAPIN_3);
             }
             else
             {
@@ -171,12 +173,16 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
             
             signal_callback_return_param.params.request.p_next = NULL;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+
             nrf_gpio_pin_clear(DATAPIN_3);
+            TIMESLOT_BEGIN_EGU->TASKS_TRIGGER[0] = 1;
             break;
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_FAILED:
             // Don't do anything. The timer will expire before timeslot ends.
             signal_callback_return_param.params.request.p_next = NULL;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+
+            nrf_gpio_pin_clear(DATAPIN_2);
             break;
         default:
             //No implementation needed
@@ -191,6 +197,13 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
 uint32_t timeslot_sd_init()
 {
     uint32_t err_code;
+
+    TIMESLOT_BEGIN_EGU->INTENSET = (1 << 0);
+    TIMESLOT_END_EGU->INTENSET = (1 << 0);
+    NVIC_SetPriority(TIMESLOT_BEGIN_IRQn, TIMESLOT_BEGIN_IRQPriority);
+    NVIC_SetPriority(TIMESLOT_END_IRQn, TIMESLOT_END_IRQPriority);
+    NVIC_EnableIRQ(TIMESLOT_BEGIN_IRQn);
+    NVIC_EnableIRQ(TIMESLOT_END_IRQn);
     
     err_code = sd_radio_session_open(radio_callback);
     if (err_code != NRF_SUCCESS)
@@ -206,4 +219,16 @@ uint32_t timeslot_sd_init()
     }
 
     return NRF_SUCCESS;
+}
+
+void TIMESLOT_BEGIN_IRQHandler(void)
+{
+    TIMESLOT_BEGIN_EGU->EVENTS_TRIGGERED[0] = 0;
+    bsp_board_led_on(3);
+}
+
+void TIMESLOT_END_IRQHandler(void)
+{
+    TIMESLOT_END_EGU->EVENTS_TRIGGERED[0] = 0;
+    bsp_board_led_off(3);
 }
