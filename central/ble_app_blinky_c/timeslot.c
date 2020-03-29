@@ -22,9 +22,6 @@ static uint32_t             m_total_timeslot_length = 0;
 
 static nrf_radio_signal_callback_return_param_t signal_callback_return_param;
 
-static ts_started_callback m_ts_started_cb;
-static ts_stopped_callback m_ts_stopped_cb;
-
 /**@brief Request next timeslot event in earliest configuration
  */
 uint32_t request_next_event_earliest(void)
@@ -108,9 +105,6 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
             
             signal_callback_return_param.params.request.p_next = NULL;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
-
-            // Trigger the timeslot started callback
-            TS_CALLBACK_EGU->TASKS_TRIGGER[TS_EGU_CALLBACK_START_INDEX] = 1;
             break;
 
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_RADIO:
@@ -134,8 +128,7 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
                 signal_callback_return_param.params.request.p_next = &m_timeslot_request;
                 signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
 
-                // Trigger the timeslot ended callback
-                TS_CALLBACK_EGU->TASKS_TRIGGER[TS_EGU_CALLBACK_END_INDEX] = 1;
+                TIMESLOT_END_EGU->TASKS_TRIGGER[0] = 1;
                 nrf_gpio_pin_clear(DATAPIN_1);
             }
             else if (NRF_TIMER0->EVENTS_COMPARE[1] &&
@@ -181,6 +174,7 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
             signal_callback_return_param.params.request.p_next = NULL;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
             nrf_gpio_pin_clear(DATAPIN_3);
+            TIMESLOT_BEGIN_EGU->TASKS_TRIGGER[0] = 1;
             break;
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_FAILED:
             // Don't do anything. The timer will expire before timeslot ends.
@@ -198,16 +192,16 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
 
 /**@brief Function for initializing the timeslot API.
  */
-uint32_t timeslot_sd_init(ts_started_callback started_cb, ts_stopped_callback stopped_cb)
+uint32_t timeslot_sd_init()
 {
     uint32_t err_code;
 
-    m_ts_started_cb = started_cb;
-    m_ts_stopped_cb = stopped_cb;
-
-    TS_CALLBACK_EGU->INTENSET = (1 << TS_EGU_CALLBACK_START_INDEX) | (1 << TS_EGU_CALLBACK_END_INDEX);
-    NVIC_SetPriority(TS_CALLBACK_EGU_IRQn, 7);
-    NVIC_EnableIRQ(TS_CALLBACK_EGU_IRQn);
+    TIMESLOT_BEGIN_EGU->INTENSET = (1 << 0);
+    TIMESLOT_END_EGU->INTENSET = (1 << 0);
+    NVIC_SetPriority(TIMESLOT_BEGIN_IRQn, TIMESLOT_BEGIN_IRQPriority);
+    NVIC_SetPriority(TIMESLOT_END_IRQn, TIMESLOT_END_IRQPriority);
+    NVIC_EnableIRQ(TIMESLOT_BEGIN_IRQn);
+    NVIC_EnableIRQ(TIMESLOT_END_IRQn);
     
     err_code = sd_radio_session_open(radio_callback);
     if (err_code != NRF_SUCCESS)
@@ -225,28 +219,14 @@ uint32_t timeslot_sd_init(ts_started_callback started_cb, ts_stopped_callback st
     return NRF_SUCCESS;
 }
 
-void TS_CALLBACK_EGU_IRQHandler(void)
+void TIMESLOT_BEGIN_IRQHandler(void)
 {
-    if(TS_CALLBACK_EGU->EVENTS_TRIGGERED[TS_EGU_CALLBACK_START_INDEX])
-    {
-        TS_CALLBACK_EGU->EVENTS_TRIGGERED[TS_EGU_CALLBACK_START_INDEX] = 0;
-        
-        if(m_ts_started_cb)
-        {
-            m_ts_started_cb();
-        }
-    }
-
-    if(TS_CALLBACK_EGU->EVENTS_TRIGGERED[TS_EGU_CALLBACK_END_INDEX])
-    {
-        TS_CALLBACK_EGU->EVENTS_TRIGGERED[TS_EGU_CALLBACK_END_INDEX] = 0;
-        
-        if(m_ts_stopped_cb)
-        {
-            m_ts_stopped_cb();
-        }
-    }
+    TIMESLOT_BEGIN_EGU->EVENTS_TRIGGERED[0] = 0;
+    bsp_board_led_on(3);
 }
 
-// Source:
-// https://devzone.nordicsemi.com/f/nordic-q-a/33392/need-help-with-timeslot-extensions
+void TIMESLOT_END_IRQHandler(void)
+{
+    TIMESLOT_END_EGU->EVENTS_TRIGGERED[0] = 0;
+    bsp_board_led_off(3);
+}
