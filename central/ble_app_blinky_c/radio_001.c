@@ -105,20 +105,20 @@ void nrf_radio_init(void)
     NRF_RADIO->TXPOWER=0x0;
 }
 
-void timer0_capture_init(uint32_t prescaler)
+void timer2_capture_init(uint32_t prescaler)
 {
-    NRF_TIMER0->MODE = TIMER_MODE_MODE_Timer;
-    NRF_TIMER0->BITMODE = (TIMER_BITMODE_BITMODE_32Bit << TIMER_BITMODE_BITMODE_Pos);
-    NRF_TIMER0->TASKS_STOP = 1;
-    NRF_TIMER0->CC[0] = 0x0000;
-    NRF_TIMER0->EVENTS_COMPARE[0] = 0;
-    NRF_TIMER0->EVENTS_COMPARE[1] = 0;
-    NRF_TIMER0->EVENTS_COMPARE[2] = 0;
-    NRF_TIMER0->EVENTS_COMPARE[3] = 0;
-    NRF_TIMER0->TASKS_CLEAR = 1;
-    NRF_TIMER0->SHORTS = 0;
-    NRF_TIMER0->PRESCALER = prescaler << TIMER_PRESCALER_PRESCALER_Pos;
-    NRF_TIMER0->TASKS_CLEAR = 1;
+    NRF_TIMER2->MODE = TIMER_MODE_MODE_Timer;
+    NRF_TIMER2->BITMODE = (TIMER_BITMODE_BITMODE_32Bit << TIMER_BITMODE_BITMODE_Pos);
+    NRF_TIMER2->TASKS_STOP = 1;
+    NRF_TIMER2->CC[0] = 0x0000;
+    NRF_TIMER2->EVENTS_COMPARE[0] = 0;
+    NRF_TIMER2->EVENTS_COMPARE[1] = 0;
+    NRF_TIMER2->EVENTS_COMPARE[2] = 0;
+    NRF_TIMER2->EVENTS_COMPARE[3] = 0;
+    NRF_TIMER2->TASKS_CLEAR = 1;
+    NRF_TIMER2->SHORTS = 0;
+    NRF_TIMER2->PRESCALER = prescaler << TIMER_PRESCALER_PRESCALER_Pos;
+    NRF_TIMER2->TASKS_CLEAR = 1;
 }
 
 /**
@@ -146,10 +146,10 @@ void setup_leds()
  */
 void nrf_ppi_config (void)
 {
-    NRF_PPI->CH[6].TEP = (uint32_t)(&NRF_TIMER0->TASKS_CAPTURE[0]);
+    NRF_PPI->CH[6].TEP = (uint32_t)(&NRF_TIMER2->TASKS_CAPTURE[0]);
     NRF_PPI->CH[6].EEP = (uint32_t)(&NRF_RADIO->EVENTS_ADDRESS); 
 
-    NRF_PPI->CH[7].TEP = (uint32_t)(&NRF_TIMER0->TASKS_START);
+    NRF_PPI->CH[7].TEP = (uint32_t)(&NRF_TIMER2->TASKS_START);
     NRF_PPI->CH[7].EEP = (uint32_t)(&NRF_RADIO->EVENTS_ADDRESS);
  
     NRF_PPI->CHENSET =  (1 << 6) | (1 << 7);
@@ -192,7 +192,7 @@ void do_rtt_measurement(void)
     }
 
     /* Configure the timer with prescaler 0, counts every 1 cycle of timer clock (16MHz) */
-    timer0_capture_init(0); 
+    timer2_capture_init(0); 
 
     nrf_radio_init();
     NRF_CLOCK->TASKS_HFCLKSTART = 1; /* Start HFCLK */
@@ -210,8 +210,8 @@ void do_rtt_measurement(void)
         test_frame[2]=(tx_pkt_counter & 0x0000FF00) >> 8;
         test_frame[3]=(tx_pkt_counter & 0x000000FF);
         
-        NRF_TIMER0->TASKS_STOP = 1;
-        NRF_TIMER0->TASKS_CLEAR = 1;
+        NRF_TIMER2->TASKS_STOP = 1;
+        NRF_TIMER2->TASKS_CLEAR = 1;
         
         /* Start Tx */
         NRF_RADIO->TASKS_TXEN = 0x1;
@@ -296,15 +296,15 @@ void do_rtt_measurement(void)
                 else
                 {
                     /* Packet is good, update stats */
-                    NRF_TIMER0->TASKS_STOP = 1;
-                    telp = NRF_TIMER0->CC[0];  
+                    NRF_TIMER2->TASKS_STOP = 1;
+                    telp = NRF_TIMER2->CC[0];  
                     binNum = telp - 4613; /* Magic number to trim away dwell time in device B, etc */
                     
                     if((binNum >= 0) && (binNum < NUM_BINS))
                             bincnt[binNum]++;
                     
                     dbptr++;
-                    NRF_TIMER0->TASKS_CLEAR = 1;
+                    NRF_TIMER2->TASKS_CLEAR = 1;
                 }
             }
         }
