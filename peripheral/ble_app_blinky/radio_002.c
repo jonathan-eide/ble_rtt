@@ -22,26 +22,34 @@
  * SOFTWARE.
  */
 
-#include <stdlib.h>
-#include <stdio.h> 
-#include <stdbool.h> 
 #include "radio_002.h"
-#include "nrf52.h"
-#include "nrf52_bitfields.h"
+#include "app_util_platform.h"
+#include "nrf_gpio.h"
+#include "nrf_delay.h"
+#include "boards.h"
+#include "app_error.h"
+#include <stdbool.h>
+#include <stdio.h> 
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
+#include <stdlib.h>
 
+#define DATAPIN_4 NRF_GPIO_PIN_MAP(1, 12)
 #define NRF_GPIO NRF_P0
-
-#define GPIO_NUMBER_LED0 13 /** LED for packet received */
-#define GPIO_NUMBER_LED1 14 /** LED for packet sent */
-
 #define BLE2M
+#define NUMBER_OF_MEASUREMENTS 10
+#define ITERATIONS_DELAY 256
 
 static uint32_t radio_freq = 78;
+static uint32_t attempts = 0;
+static uint32_t it_delay = 0;
 static uint8_t test_frame[256];
 static uint32_t rx_pkt_counter = 0;
 static uint32_t rx_pkt_counter_crcok = 0;
 static uint32_t dbgcnt1=0;
 static uint32_t tx_pkt_counter = 0;
+static bool timed_out = false;
 
 static uint8_t response_test_frame[255] = 
     {0x00, 0x04, 0xFF, 0xC1, 0xFB, 0xE8};
@@ -81,61 +89,46 @@ void nrf_radio_init(void)
     NRF_RADIO->TXPOWER=0x0;
 }
 
-/**
- * @brief Setting up LEDs used for inication packet received or sent
- */
-void setup_leds()
+void timeslot_status_true()
 {
-    NRF_GPIO->PIN_CNF[GPIO_NUMBER_LED0] = \
-    ((GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) | \
-    (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) | \
-    (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) | \
-    (GPIO_PIN_CNF_INPUT_Connect << GPIO_PIN_CNF_INPUT_Pos) | \
-    (GPIO_PIN_CNF_DIR_Output << GPIO_PIN_CNF_DIR_Pos));
+    timed_out = false;
+}
 
-    NRF_GPIO->PIN_CNF[GPIO_NUMBER_LED1] = \
-    ((GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) | \
-    (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) | \
-    (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) | \
-    (GPIO_PIN_CNF_INPUT_Connect << GPIO_PIN_CNF_INPUT_Pos) | \
-    (GPIO_PIN_CNF_DIR_Output << GPIO_PIN_CNF_DIR_Pos));
+void timeslot_status_false()
+{
+    timed_out = true;
 }
 
 void do_rtt_measurement(void)
 {
     volatile  uint32_t i;
-    /* Start HFXO */
-    NRF_CLOCK->EVENTS_HFCLKSTARTED = 0;
-    NRF_CLOCK->TASKS_HFCLKSTART = 1;
-    while (NRF_CLOCK->EVENTS_HFCLKSTARTED == 0)
-    {
-    }
   
     nrf_radio_init();
-    setup_leds();
     
     /* Setting radio in receive mode */
     NRF_RADIO->TASKS_RXEN = 0x1;
     NRF_RADIO->EVENTS_DISABLED = 0;
-  
-    while (true)
+    attempts = 0;
+    while (attempts < NUMBER_OF_MEASUREMENTS)
     {
-        NRF_GPIO->OUTCLR = 1 << GPIO_NUMBER_LED0;  /* Rx LED On */
-        NRF_GPIO->OUTSET = 1 << GPIO_NUMBER_LED1;  /* Tx LED Off */
+        attempts++;
+        nrf_gpio_pin_set(DATAPIN_4);
 
         /* Wait for packet */
-        while (NRF_RADIO->EVENTS_DISABLED == 0)
+        while ((NRF_RADIO->EVENTS_DISABLED == 0) && (it_delay<4096))
         {
+            it_delay++;
         }
+        it_delay = 0;
         NRF_RADIO->EVENTS_DISABLED = 0;
-
+        nrf_gpio_pin_clear(DATAPIN_4);
         /* Packet received, check CRC */
         rx_pkt_counter++;
         if(NRF_RADIO->CRCSTATUS>0)
         {
             /* CRC ok */
             rx_pkt_counter_crcok++;
-
+            
             for(i=2;i<4;i++)
                 response_test_frame[i]=test_frame[i];
         }
@@ -151,45 +144,49 @@ void do_rtt_measurement(void)
         
         /* Switch to Tx asap and send response packet back to initiator */
         NRF_RADIO->PACKETPTR = (uint32_t)response_test_frame; /* Switch to tx buffer */
-        NRF_GPIO->OUTSET = 1 << GPIO_NUMBER_LED0; /* Rx LED Off */
-        NRF_GPIO->OUTCLR = 1 << GPIO_NUMBER_LED1; /* Tx LED On */
         NRF_RADIO->TASKS_RXEN = 0x0;
         //NRF_RADIO->TASKS_TXEN = 0x1;  /* Going via shortcut here */
         
         /* Wait for radio to be ready to transmit */
-        while (NRF_RADIO->EVENTS_READY == 0)
+        while ((NRF_RADIO->EVENTS_READY == 0) && (it_delay<ITERATIONS_DELAY))
         {
+            it_delay++;
         }
+        it_delay = 0;
         NRF_RADIO->EVENTS_READY = 0;
-        
         /* Remove short DISABLED->TXEN before Tx ends */
         NRF_RADIO->SHORTS = (RADIO_SHORTS_READY_START_Enabled << RADIO_SHORTS_READY_START_Pos) |
                                                 (RADIO_SHORTS_END_DISABLE_Enabled << RADIO_SHORTS_END_DISABLE_Pos);
         
         /* Wait for packet to be transmitted */
-        while (NRF_RADIO->EVENTS_END == 0)
+        while ((NRF_RADIO->EVENTS_END == 0) && (it_delay<ITERATIONS_DELAY))
         {
+            it_delay++;
         }
+        it_delay = 0;
         NRF_RADIO->EVENTS_END = 0;	
 
         /* Packet sent, disable radio */
-        while (NRF_RADIO->EVENTS_DISABLED == 0)
+        while ((NRF_RADIO->EVENTS_DISABLED == 0) && (it_delay<ITERATIONS_DELAY))
         {
+            it_delay++;
         }
+        it_delay = 0;
         NRF_RADIO->EVENTS_DISABLED = 0;
         
         tx_pkt_counter++;
         
         /* Switch to Rx asap */
         NRF_RADIO->PACKETPTR = (uint32_t)test_frame; /* Switch to rx buffer */
-        NRF_GPIO->OUTSET = 1 << GPIO_NUMBER_LED1; /* Tx LED Off */
         NRF_RADIO->TASKS_TXEN = 0x0;
         NRF_RADIO->TASKS_RXEN = 0x1;
 
         /* Enable radio */
-        while (NRF_RADIO->EVENTS_READY == 0)
+        while ((NRF_RADIO->EVENTS_READY == 0) && (it_delay<ITERATIONS_DELAY))
         {
+            it_delay++;
         }
+        it_delay = 0;
         NRF_RADIO->EVENTS_READY = 0;
         
         /* Enable short DISABLED->TXEN before Rx goes to DISABLED */

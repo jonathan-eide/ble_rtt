@@ -2,5 +2,9 @@
 #define RADIO_001_H
 
 void do_rtt_measurement(void);
+void test_func();
+void timeslot_status_true();
+void timeslot_status_false();
+
 
 #endif // RADIO_001_H

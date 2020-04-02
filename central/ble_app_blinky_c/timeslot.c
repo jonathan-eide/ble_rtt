@@ -10,6 +10,7 @@
 #include "timeslot.h"
 #include "nrf_error.h"
 #include "nrf_sdm.h"
+#include "radio_001.h"
 
 #define DATAPIN_1 NRF_GPIO_PIN_MAP(1, 3)
 #define DATAPIN_2 NRF_GPIO_PIN_MAP(1, 1)
@@ -19,6 +20,7 @@
 static nrf_radio_request_t  m_timeslot_request;
 static uint32_t             m_slot_length;
 static uint32_t             m_total_timeslot_length = 0;
+static bool connected = false;
 
 static nrf_radio_signal_callback_return_param_t signal_callback_return_param;
 
@@ -76,6 +78,16 @@ void nrf_evt_signal_handler(uint32_t evt_id)
     }
 }
 
+void connected_enable()
+{
+    connected = true;
+}
+
+void connected_disable()
+{
+    connected = false;
+}
+
 /**@brief Timeslot event handler
  */
 nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
@@ -127,7 +139,7 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
                 // Schedule next timeslot
                 signal_callback_return_param.params.request.p_next = &m_timeslot_request;
                 signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
-
+                timeslot_status_false();
                 TIMESLOT_END_EGU->TASKS_TRIGGER[0] = 1;
                 nrf_gpio_pin_clear(DATAPIN_1);
             }
@@ -174,6 +186,7 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
             signal_callback_return_param.params.request.p_next = NULL;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
             nrf_gpio_pin_clear(DATAPIN_3);
+            timeslot_status_true();
             TIMESLOT_BEGIN_EGU->TASKS_TRIGGER[0] = 1;
             break;
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_FAILED:
@@ -223,6 +236,12 @@ void TIMESLOT_BEGIN_IRQHandler(void)
 {
     TIMESLOT_BEGIN_EGU->EVENTS_TRIGGERED[0] = 0;
     bsp_board_led_on(3);
+    if (connected)
+    {
+        // test_func();
+        do_rtt_measurement();
+    }
+    
 }
 
 void TIMESLOT_END_IRQHandler(void)

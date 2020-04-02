@@ -43,7 +43,10 @@
 #define DATABASE 0x20001000 /** Base address for measurement database */
 #define DATA_SIZE 128 
 #define NUM_BINS 128 
-#define NUMBER_OF_MEASUREMENTS NUM_BINS*10
+#define NUMBER_OF_MEASUREMENTS 10
+#define ITERATIONS_DELAY 256
+
+#define DATAPIN_4 NRF_GPIO_PIN_MAP(1, 12)
 
 #define BLE2M
 
@@ -53,12 +56,14 @@ static uint32_t tx_pkt_counter = 0;
 static uint32_t radio_freq = 78;
 
 static uint32_t timeout;
+static uint32_t it_delay;
 static uint32_t telp;
 static uint32_t rx_pkt_counter = 0;
 static uint32_t rx_pkt_counter_crcok = 0;
 static uint32_t rx_timeouts = 0;
 static uint32_t rx_ignored = 0;
 static uint8_t rx_test_frame[256];
+static bool timed_out = false;
 
 static uint32_t database[DATA_SIZE] __attribute__((section(".ARM.__at_DATABASE")));
 static uint32_t dbptr=0;
@@ -122,26 +127,6 @@ void timer2_capture_init(uint32_t prescaler)
 }
 
 /**
- * @brief Setting up LEDs used for inication packet received or sent
- */
-void setup_leds()
-{
-    NRF_GPIO->PIN_CNF[GPIO_NUMBER_LED0] = \
-    ((GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) | \
-    (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) | \
-    (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) | \
-    (GPIO_PIN_CNF_INPUT_Connect << GPIO_PIN_CNF_INPUT_Pos) | \
-    (GPIO_PIN_CNF_DIR_Output << GPIO_PIN_CNF_DIR_Pos));
-
-    NRF_GPIO->PIN_CNF[GPIO_NUMBER_LED1] = \
-    ((GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) | \
-    (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) | \
-    (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) | \
-    (GPIO_PIN_CNF_INPUT_Connect << GPIO_PIN_CNF_INPUT_Pos) | \
-    (GPIO_PIN_CNF_DIR_Output << GPIO_PIN_CNF_DIR_Pos));
-}
-
-/**
  * @brief Setting up ppi for capturing time of flight
  */
 void nrf_ppi_config (void)
@@ -173,66 +158,96 @@ float calc_dist()
     return val;
 }
 
-void do_rtt_measurement(void)
+
+void timeslot_status_true()
 {
-    uint32_t tempval, tempval1;
+    timed_out = false;
+}
+
+void timeslot_status_false()
+{
+    timed_out = true;
+}
+
+
+void test_func()
+{
+    nrf_gpio_pin_set(DATAPIN_4);
+    uint32_t attempts,tempval, tempval1;
     int j, binNum;
     
     nrf_ppi_config();
-    setup_leds();
-        
-    NRF_CLOCK->EVENTS_HFCLKSTARTED = 0;
-    NRF_CLOCK->TASKS_HFCLKSTART = 1;
 
     /* Puts zeros into bincnt */
     memset(bincnt, 0, sizeof bincnt);
-
-    while (NRF_CLOCK->EVENTS_HFCLKSTARTED == 0)
-    {
-    }
 
     /* Configure the timer with prescaler 0, counts every 1 cycle of timer clock (16MHz) */
     timer2_capture_init(0); 
 
     nrf_radio_init();
-    NRF_CLOCK->TASKS_HFCLKSTART = 1; /* Start HFCLK */
 
     tx_pkt_counter = 0;
 
-    while (dbptr < NUMBER_OF_MEASUREMENTS)
+
+}
+
+void do_rtt_measurement(void)
+{
+    timed_out = false;
+    nrf_gpio_pin_set(DATAPIN_4);
+    NRF_TIMER4->TASKS_STOP          = 1;
+    NRF_TIMER4->TASKS_CLEAR         = 1;
+    NRF_TIMER4->MODE                = (TIMER_MODE_MODE_Timer << TIMER_MODE_MODE_Pos);
+    NRF_TIMER4->EVENTS_COMPARE[0]   = 0;
+    NRF_TIMER4->INTENSET = (TIMER_INTENSET_COMPARE0_Set << TIMER_INTENSET_COMPARE0_Pos);
+    NRF_TIMER4->CC[0]               = (35000UL);
+    NRF_TIMER4->BITMODE             = (TIMER_BITMODE_BITMODE_24Bit << TIMER_BITMODE_BITMODE_Pos);
+    NRF_TIMER4->PRESCALER           = 4;
+    NVIC_SetPriority(TIMER4_IRQn, 5);
+    NVIC_EnableIRQ(TIMER4_IRQn);
+    NRF_TIMER4->TASKS_START         = 1;
+    uint32_t attempts,tempval, tempval1;
+    int j, binNum;
+    
+    nrf_ppi_config();
+
+    /* Puts zeros into bincnt */
+    memset(bincnt, 0, sizeof bincnt);
+
+    /* Configure the timer with prescaler 0, counts every 1 cycle of timer clock (16MHz) */
+    timer2_capture_init(0); 
+
+    nrf_radio_init();
+
+    tx_pkt_counter = 0;
+    attempts = 0;
+    
+    while (attempts < NUMBER_OF_MEASUREMENTS)
     {
         NRF_RADIO->PACKETPTR = (uint32_t) test_frame; /* Switch to tx buffer */
         NRF_RADIO->TASKS_RXEN = 0x0;
-            
-        NRF_GPIO->OUTSET = 1 << GPIO_NUMBER_LED0; /* Rx LED Off */
-        NRF_GPIO->OUTCLR = 1 << GPIO_NUMBER_LED1; /* Tx LED On */
+                    
         /* Copy the tx packet counter into the payload */
         test_frame[2]=(tx_pkt_counter & 0x0000FF00) >> 8;
         test_frame[3]=(tx_pkt_counter & 0x000000FF);
         
         NRF_TIMER2->TASKS_STOP = 1;
         NRF_TIMER2->TASKS_CLEAR = 1;
-        
+                
         /* Start Tx */
         NRF_RADIO->TASKS_TXEN = 0x1;
-            
+
         /* Wait for transmision to begin */
-        while (NRF_RADIO->EVENTS_READY == 0)
-        {
-        }
-        
+        while ((NRF_RADIO->EVENTS_READY == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
         NRF_RADIO->EVENTS_READY = 0;
             
         /* Packet is sent */
-        while (NRF_RADIO->EVENTS_END == 0)
-        {
-        }
-        NRF_RADIO->EVENTS_END = 0;      
-        
+        while ((NRF_RADIO->EVENTS_END == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
+        NRF_RADIO->EVENTS_END = 0;
+
+
         /* Disable radio */
-        while (NRF_RADIO->EVENTS_DISABLED == 0)
-        {
-        }
+        while ((NRF_RADIO->EVENTS_DISABLED == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
         NRF_RADIO->EVENTS_DISABLED = 0;
         
         tx_pkt_counter++;
@@ -254,16 +269,15 @@ void do_rtt_measurement(void)
          * Packet sent, switch to Rx asap 
          * Note: there is a small delay inserted on the B side to avoid race here
          */
-        NRF_GPIO->OUTSET = 1 << GPIO_NUMBER_LED1; /* Tx LED Off */
         NRF_RADIO->TASKS_TXEN = 0x0;
         NRF_RADIO->TASKS_RXEN = 0x1;
         NRF_RADIO->PACKETPTR = (uint32_t) rx_test_frame; /* Switch to rx buffer*/
         
         /* Wait for response or timeout */
         timeout=0; 
-        while ((NRF_RADIO->EVENTS_DISABLED == 0) && (timeout<2048) )
+        while ((NRF_RADIO->EVENTS_DISABLED == 0) && (timeout<2048))
         { 
-                timeout++;
+            timeout++;
         }
         
         /* Now, did we time out? */
@@ -272,15 +286,11 @@ void do_rtt_measurement(void)
             /* Timeout, stop radio manually */
             NRF_RADIO->TASKS_STOP = 1;
             NRF_RADIO->TASKS_DISABLE = 1;
-            while(NRF_RADIO->EVENTS_DISABLED == 0);
+            while ((NRF_RADIO->EVENTS_DISABLED == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
             rx_timeouts++;
         }
         else
         {
-            /* Packet received */
-            if(highper < 1)
-                NRF_GPIO->OUTCLR = 1 << GPIO_NUMBER_LED0;  /* Rx LED On */
-            
             rx_pkt_counter++;
             if(NRF_RADIO->CRCSTATUS>0)
             {
@@ -308,8 +318,11 @@ void do_rtt_measurement(void)
                 }
             }
         }
+        attempts++;
         NRF_RADIO->EVENTS_DISABLED = 0;
     }
+
+    dbptr = 0;
     
     /* Loading measurements in to database */
     for(j = 0; j < NUM_BINS; j++)
@@ -317,10 +330,29 @@ void do_rtt_measurement(void)
         database[j] = bincnt[j];
         bincnt[j] = 0;
     }
+    
+    NRF_RADIO->INTENCLR      = 0xFFFFFFFF;
+    NRF_RADIO->TASKS_DISABLE = 1;
+    NRF_RADIO->SHORTS = 0;
+    NRF_RADIO->INTENCLR = 0xFFFFFFFF;
+    NRF_RADIO->EVENTS_DISABLED = 0;
+    while ((NRF_RADIO->EVENTS_DISABLED == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
 
-    NRF_GPIO->OUTSET = 1 << GPIO_NUMBER_LED1; /* Tx LED Off */
+    NRF_TIMER2->TASKS_STOP = 1;
+
+    NRF_PPI->CHENCLR =  (1 << 6) | (1 << 7);
+    NVIC_DisableIRQ(TIMER4_IRQn);
+    NRF_TIMER4->TASKS_STOP  = 1;
+    NRF_TIMER4->EVENTS_COMPARE[0] = 0;
+    (void)NRF_TIMER4->EVENTS_COMPARE[0];
+    nrf_gpio_pin_clear(DATAPIN_4);
 }
 
+
+void TIMER4_IRQHandler()
+{
+    
+}
 
 void HardFault_Handler(void)
 {

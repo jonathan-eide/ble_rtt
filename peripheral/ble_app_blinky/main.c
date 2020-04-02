@@ -26,6 +26,7 @@
 #define DATAPIN_1 NRF_GPIO_PIN_MAP(1, 3)
 #define DATAPIN_2 NRF_GPIO_PIN_MAP(1, 1)
 #define DATAPIN_3 NRF_GPIO_PIN_MAP(1, 10)
+#define DATAPIN_4 NRF_GPIO_PIN_MAP(1, 12)
 
 #define ADVERTISING_LED                 BSP_BOARD_LED_0                         /**< Is on when device is advertising. */
 #define CONNECTED_LED                   BSP_BOARD_LED_1                         /**< Is on when device has connected. */
@@ -45,7 +46,7 @@
 #define SLAVE_LATENCY                   0                                       /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)         /**< Connection supervisory time-out (4 seconds). */
 
-#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(10000)                  /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (15 seconds). */
+#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000)                  /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (15 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(5000)                   /**< Time between each call to sd_ble_gap_conn_param_update after the first call (5 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT    3                                       /**< Number of attempts before giving up the connection parameter negotiation. */
 
@@ -111,6 +112,7 @@ static void pins_init(void)
     nrf_gpio_cfg_output(DATAPIN_1);
     nrf_gpio_cfg_output(DATAPIN_2);
     nrf_gpio_cfg_output(DATAPIN_3);
+    nrf_gpio_cfg_output(DATAPIN_4);
 }
 
 /**@brief Function for the Timer initialization.
@@ -354,12 +356,14 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt)
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
             APP_ERROR_CHECK(err_code);
+            connected_enable();
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
             NRF_LOG_INFO("Disconnected");
             bsp_board_led_off(CONNECTED_LED);
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
+            connected_disable();
             advertising_start();
             break;
 
