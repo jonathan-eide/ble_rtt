@@ -26,6 +26,7 @@
 #define DATAPIN_1 NRF_GPIO_PIN_MAP(1, 3)
 #define DATAPIN_2 NRF_GPIO_PIN_MAP(1, 1)
 #define DATAPIN_3 NRF_GPIO_PIN_MAP(1, 10)
+#define DATAPIN_4 NRF_GPIO_PIN_MAP(1, 12)
 
 #define CENTRAL_SCANNING_LED            BSP_BOARD_LED_0                     /**< Scanning LED will be on when the device is scanning. */
 #define CENTRAL_CONNECTED_LED           BSP_BOARD_LED_1                     /**< Connected LED will be on when the device is connected. */
@@ -99,6 +100,7 @@ static void pins_init(void)
     nrf_gpio_cfg_output(DATAPIN_1);
     nrf_gpio_cfg_output(DATAPIN_2);
     nrf_gpio_cfg_output(DATAPIN_3);
+    nrf_gpio_cfg_output(DATAPIN_4);
 }
 
 /**@brief Function to start scanning.
@@ -173,6 +175,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt)
             // peripherals to connect to.
             bsp_board_led_on(CENTRAL_CONNECTED_LED);
             bsp_board_led_off(CENTRAL_SCANNING_LED);
+            connected_enable();
         } break;
 
         // Upon disconnection, reset the connection handle of the peer which disconnected, update
@@ -181,6 +184,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt)
         {
             NRF_LOG_INFO("Disconnected.");
             scan_start();
+            connected_disable();
         } break;
 
         case BLE_GAP_EVT_TIMEOUT:
