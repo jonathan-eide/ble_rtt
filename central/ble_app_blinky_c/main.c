@@ -84,16 +84,6 @@ static void lbs_error_handler(uint32_t nrf_error)
     APP_ERROR_HANDLER(nrf_error);
 }
 
-/**@brief Function for handling the LED Button Service client errors.
- *
- * @param[in]   nrf_error   Error code containing information about what went wrong.
- */
-static void lbs_error_handler(uint32_t nrf_error)
-{
-    APP_ERROR_HANDLER(nrf_error);
-}
-
-
 /**@brief Function for the LEDs initialization.
  *
  * @details Initializes all LEDs used by the application.
@@ -185,7 +175,6 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt)
             // peripherals to connect to.
             bsp_board_led_on(CENTRAL_CONNECTED_LED);
             bsp_board_led_off(CENTRAL_SCANNING_LED);
-            connected_enable();
         } break;
 
         // Upon disconnection, reset the connection handle of the peer which disconnected, update
@@ -194,7 +183,6 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt)
         {
             NRF_LOG_INFO("Disconnected.");
             scan_start();
-            connected_disable();
         } break;
 
         case BLE_GAP_EVT_TIMEOUT:

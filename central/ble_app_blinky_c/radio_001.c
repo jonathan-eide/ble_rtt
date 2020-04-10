@@ -52,8 +52,6 @@ static uint8_t test_frame[255] = {0x00, 0x04, 0xFF, 0xC1, 0xFB, 0xE8};
 
 static uint32_t tx_pkt_counter = 0;
 static uint32_t radio_freq = 78;
-static uint32_t timeout;
-static uint32_t it_delay;
 static uint32_t telp;
 static uint32_t rx_pkt_counter = 0;
 static uint32_t rx_pkt_counter_crcok = 0;

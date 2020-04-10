@@ -20,7 +20,6 @@
 static nrf_radio_request_t  m_timeslot_request;
 static uint32_t             m_slot_length;
 static uint32_t             m_total_timeslot_length = 0;
-static bool connected = false;
 static nrf_radio_signal_callback_return_param_t signal_callback_return_param;
 
 /**@brief Request next timeslot event in earliest configuration
@@ -77,140 +76,122 @@ void nrf_evt_signal_handler(uint32_t evt_id)
     }
 }
 
-void connected_enable()
-{
-    connected = true;
-}
-
-void connected_disable()
-{
-    connected = false;
-}
-
 /**@brief Timeslot event handler
  */
 nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
 {
-    if (connected)
+    switch(signal_type)
     {
-        switch(signal_type)
-        {
-            case NRF_RADIO_CALLBACK_SIGNAL_TYPE_START:
-                nrf_gpio_pin_set(DATAPIN_1);
-                // TIMER0 is pre-configured for 1Mhz.
-                NRF_TIMER0->TASKS_STOP          = 1;
-                NRF_TIMER0->TASKS_CLEAR         = 1;
-                NRF_TIMER0->MODE                = (TIMER_MODE_MODE_Timer << TIMER_MODE_MODE_Pos);
-                NRF_TIMER0->EVENTS_COMPARE[0]   = 0;
-                NRF_TIMER0->EVENTS_COMPARE[1]   = 0;
+        case NRF_RADIO_CALLBACK_SIGNAL_TYPE_START:
+            nrf_gpio_pin_set(DATAPIN_1);
 
-                NRF_TIMER0->INTENSET = (TIMER_INTENSET_COMPARE0_Set << TIMER_INTENSET_COMPARE0_Pos) | 
-                                       (TIMER_INTENSET_COMPARE1_Set << TIMER_INTENSET_COMPARE1_Pos);
+            // TIMER0 is pre-configured for 1Mhz.
+            NRF_TIMER0->TASKS_STOP          = 1;
+            NRF_TIMER0->TASKS_CLEAR         = 1;
+            NRF_TIMER0->MODE                = (TIMER_MODE_MODE_Timer << TIMER_MODE_MODE_Pos);
+            NRF_TIMER0->EVENTS_COMPARE[0]   = 0;
+            NRF_TIMER0->EVENTS_COMPARE[1]   = 0;
+            NRF_TIMER0->INTENSET = (TIMER_INTENSET_COMPARE0_Set << TIMER_INTENSET_COMPARE0_Pos) | 
+                                   (TIMER_INTENSET_COMPARE1_Set << TIMER_INTENSET_COMPARE1_Pos);
+            NRF_TIMER0->CC[0]               = (TS_LEN_US - TS_SAFETY_MARGIN_US);
+            NRF_TIMER0->CC[1]               = (TS_LEN_US - TS_EXTEND_MARGIN_US);
+            NRF_TIMER0->BITMODE             = (TIMER_BITMODE_BITMODE_24Bit << TIMER_BITMODE_BITMODE_Pos);
+            NRF_TIMER0->TASKS_START         = 1;
 
-                NRF_TIMER0->CC[0]               = (TS_LEN_US - TS_SAFETY_MARGIN_US);
-                NRF_TIMER0->CC[1]               = (TS_LEN_US - TS_EXTEND_MARGIN_US);
-                NRF_TIMER0->BITMODE             = (TIMER_BITMODE_BITMODE_24Bit << TIMER_BITMODE_BITMODE_Pos);
-                NRF_TIMER0->TASKS_START         = 1;
+            NVIC_EnableIRQ(TIMER0_IRQn);
 
-                NVIC_EnableIRQ(TIMER0_IRQn);
+            m_total_timeslot_length = 0;
 
-                m_total_timeslot_length = 0;
+            signal_callback_return_param.params.request.p_next = NULL;
+            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+            break;
+        case NRF_RADIO_CALLBACK_SIGNAL_TYPE_RADIO:
+            // Don't do anything
+            signal_callback_return_param.params.request.p_next = NULL;
+            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+            break;
 
-                signal_callback_return_param.params.request.p_next = NULL;
-                signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
-                break;
+        case NRF_RADIO_CALLBACK_SIGNAL_TYPE_TIMER0:
+            if (NRF_TIMER0->EVENTS_COMPARE[0] &&
+               (NRF_TIMER0->INTENSET & (TIMER_INTENSET_COMPARE0_Enabled << TIMER_INTENCLR_COMPARE0_Pos)))
+            {
+                m_timeslot_request.params.earliest.length_us   = TS_LEN_US;
+                m_slot_length                                  = TS_LEN_US;
 
-            case NRF_RADIO_CALLBACK_SIGNAL_TYPE_RADIO:
-                // Don't do anything
-                signal_callback_return_param.params.request.p_next = NULL;
-                signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
-                break;
+                bsp_board_led_off(2);
 
-            case NRF_RADIO_CALLBACK_SIGNAL_TYPE_TIMER0:
-                if (NRF_TIMER0->EVENTS_COMPARE[0] &&
-                   (NRF_TIMER0->INTENSET & (TIMER_INTENSET_COMPARE0_Enabled << TIMER_INTENCLR_COMPARE0_Pos)))
+                NRF_TIMER0->TASKS_STOP  = 1;
+                NRF_TIMER0->EVENTS_COMPARE[0] = 0;
+                (void)NRF_TIMER0->EVENTS_COMPARE[0];
+
+                // Schedule next timeslot
+                signal_callback_return_param.params.request.p_next = &m_timeslot_request;
+                signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
+
+                nrf_gpio_pin_clear(DATAPIN_1);
+
+                TIMESLOT_END_EGU->TASKS_TRIGGER[0] = 1;
+            }
+            else if (NRF_TIMER0->EVENTS_COMPARE[1] &&
+               (NRF_TIMER0->INTENSET & (TIMER_INTENSET_COMPARE1_Enabled << TIMER_INTENCLR_COMPARE1_Pos)))
+            {
+                m_timeslot_request.params.earliest.length_us   = TS_LEN_EXTENSION_US;
+                m_slot_length                                  = TS_LEN_EXTENSION_US;
+
+                configure_next_event_earliest();
+
+                NRF_TIMER0->EVENTS_COMPARE[1] = 0;
+                (void)NRF_TIMER0->EVENTS_COMPARE[1];
+
+                // This is the "try to extend timeslot" timeout
+                if (m_total_timeslot_length < (TS_TOT_EXT_LENGTH_US - 5000UL - TS_LEN_EXTENSION_US))
                 {
-                    m_timeslot_request.params.earliest.length_us   = TS_LEN_US;
-                    m_slot_length                                  = TS_LEN_US;
-                    bsp_board_led_off(2);
-                    NRF_TIMER0->TASKS_STOP  = 1;
-                    NRF_TIMER0->EVENTS_COMPARE[0] = 0;
-                    (void)NRF_TIMER0->EVENTS_COMPARE[0];
-
-                    // Schedule next timeslot
-                    signal_callback_return_param.params.request.p_next = &m_timeslot_request;
-                    signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
-
-                    TIMESLOT_END_EGU->TASKS_TRIGGER[0] = 1;
-                    nrf_gpio_pin_clear(DATAPIN_1);
-                }
-                else if (NRF_TIMER0->EVENTS_COMPARE[1] &&
-                   (NRF_TIMER0->INTENSET & (TIMER_INTENSET_COMPARE1_Enabled << TIMER_INTENCLR_COMPARE1_Pos)))
-                {
-                    m_timeslot_request.params.earliest.length_us   = TS_LEN_EXTENSION_US;
-                    m_slot_length                                  = TS_LEN_EXTENSION_US;
-                    configure_next_event_earliest();
-                    NRF_TIMER0->EVENTS_COMPARE[1] = 0;
-                    (void)NRF_TIMER0->EVENTS_COMPARE[1];
-
-                    // This is the "try to extend timeslot" timeout
-                    if (m_total_timeslot_length < (TS_TOT_EXT_LENGTH_US - 5000UL - TS_LEN_EXTENSION_US))
-                    {
-                        // Request timeslot extension if total length does not exceed TS_TOT_EXT_LENGTH_US
-                        signal_callback_return_param.params.extend.length_us = TS_LEN_EXTENSION_US;
-                        signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_EXTEND;
-                    }
-                    nrf_gpio_pin_set(DATAPIN_2);
-                    nrf_gpio_pin_set(DATAPIN_3);
-                }
-                else
-                {
-                    signal_callback_return_param.params.request.p_next = NULL;
-                    signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+                    // Request timeslot extension if total length does not exceed TS_TOT_EXT_LENGTH_US
+                    signal_callback_return_param.params.extend.length_us = TS_LEN_EXTENSION_US;
+                    signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_EXTEND;
                 }
 
-                break;
-            case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_SUCCEEDED:
-                bsp_board_led_on(2);
-
-                // Extension succeeded: update timer
-                NRF_TIMER0->TASKS_STOP          = 1;
-                NRF_TIMER0->EVENTS_COMPARE[0]   = 0;
-                NRF_TIMER0->EVENTS_COMPARE[1]   = 0;
-                NRF_TIMER0->CC[0]               += (TS_LEN_EXTENSION_US - 25);
-                NRF_TIMER0->CC[1]               += (TS_LEN_EXTENSION_US - 25);
-                NRF_TIMER0->TASKS_START         = 1;
-
-                // Keep track of total length
-                m_total_timeslot_length += TS_LEN_EXTENSION_US;
-
+                nrf_gpio_pin_set(DATAPIN_2);
+                nrf_gpio_pin_set(DATAPIN_3);
+            }
+            else
+            {
                 signal_callback_return_param.params.request.p_next = NULL;
                 signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+            }
+            break;
+        case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_SUCCEEDED:
+            bsp_board_led_on(2);
 
-                nrf_gpio_pin_clear(DATAPIN_3);
-                TIMESLOT_BEGIN_EGU->TASKS_TRIGGER[0] = 1;
-                break;
-            case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_FAILED:
-                // Don't do anything. The timer will expire before timeslot ends.
-                signal_callback_return_param.params.request.p_next = NULL;
-                signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+            // Extension succeeded: update timer
+            NRF_TIMER0->TASKS_STOP          = 1;
+            NRF_TIMER0->EVENTS_COMPARE[0]   = 0;
+            NRF_TIMER0->EVENTS_COMPARE[1]   = 0;
+            NRF_TIMER0->CC[0]               += (TS_LEN_EXTENSION_US - 25);
+            NRF_TIMER0->CC[1]               += (TS_LEN_EXTENSION_US - 25);
+            NRF_TIMER0->TASKS_START         = 1;
 
-                nrf_gpio_pin_clear(DATAPIN_2);
-                break;
-            default:
-                //No implementation needed
-                break;
-        }
-        return (&signal_callback_return_param);
+            // Keep track of total length
+            m_total_timeslot_length += TS_LEN_EXTENSION_US;
+            signal_callback_return_param.params.request.p_next = NULL;
+            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+
+            nrf_gpio_pin_clear(DATAPIN_3);
+
+            TIMESLOT_BEGIN_EGU->TASKS_TRIGGER[0] = 1;
+            break;
+        case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_FAILED:
+            // Don't do anything. The timer will expire before timeslot ends.
+            signal_callback_return_param.params.request.p_next = NULL;
+            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+
+            nrf_gpio_pin_clear(DATAPIN_2);
+            break;
+        default:
+            //No implementation needed
+            break;
     }
-    else
-    {
-        signal_callback_return_param.params.request.p_next = NULL;
-        signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
-        return (&signal_callback_return_param);
-    }
-    
-   
+    return (&signal_callback_return_param);
 }
 
 

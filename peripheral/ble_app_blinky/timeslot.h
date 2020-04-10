@@ -58,7 +58,4 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type);
  */
 uint32_t timeslot_sd_init();
 
-void connected_enable(void);
-void connected_disable(void);
-
 #endif

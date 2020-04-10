@@ -21,7 +21,6 @@
 static nrf_radio_request_t  m_timeslot_request;
 static uint32_t             m_slot_length;
 static uint32_t             m_total_timeslot_length = 0;
-static bool connected = false;
 
 static nrf_radio_signal_callback_return_param_t signal_callback_return_param;
 
@@ -77,16 +76,6 @@ void nrf_evt_signal_handler(uint32_t evt_id)
         default:
             break;
     }
-}
-
-void connected_enable()
-{
-    connected = true;
-}
-
-void connected_disable()
-{
-    connected = false;
 }
 
 /**@brief Timeslot event handler
@@ -236,12 +225,7 @@ void TIMESLOT_BEGIN_IRQHandler(void)
 {
     TIMESLOT_BEGIN_EGU->EVENTS_TRIGGERED[0] = 0;
     bsp_board_led_on(3);
-    if (connected)
-    {
-        // test_func();
-        do_rtt_measurement();
-    }
-    
+    do_rtt_measurement();
 }
 
 void TIMESLOT_END_IRQHandler(void)
