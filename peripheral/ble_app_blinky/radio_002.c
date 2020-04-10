@@ -37,9 +37,8 @@
 
 #define DATAPIN_4 NRF_GPIO_PIN_MAP(1, 12)
 #define NRF_GPIO NRF_P0
-#define BLE2M
+
 #define NUMBER_OF_MEASUREMENTS 10
-#define ITERATIONS_DELAY 256
 
 static uint32_t radio_freq = 78;
 static uint32_t attempts = 0;
@@ -48,19 +47,18 @@ static uint32_t rx_pkt_counter = 0;
 static uint32_t rx_pkt_counter_crcok = 0;
 static uint32_t dbgcnt1=0;
 static uint32_t tx_pkt_counter = 0;
-static bool timed_out = false;
 
 static uint8_t response_test_frame[255] = 
     {0x00, 0x04, 0xFF, 0xC1, 0xFB, 0xE8};
-
 
 /**
  * @brief Initializing the radio
  */
 void nrf_radio_init(void)
 {
+    uint32_t aa_address = 0x71764129;
     NRF_RADIO->POWER                = (RADIO_POWER_POWER_Enabled << RADIO_POWER_POWER_Pos);
-#if defined(BLE2M)
+
     NRF_RADIO->MODE = 4 << RADIO_MODE_MODE_Pos; /* Radio in BLe 1M */
     NRF_RADIO->SHORTS = (RADIO_SHORTS_READY_START_Enabled << RADIO_SHORTS_READY_START_Pos) |
                         (RADIO_SHORTS_END_DISABLE_Enabled << RADIO_SHORTS_END_DISABLE_Pos) |
@@ -73,21 +71,18 @@ void nrf_radio_init(void)
     NRF_RADIO->FREQUENCY = (RADIO_FREQUENCY_MAP_Default << RADIO_FREQUENCY_MAP_Pos)  +
                             ((radio_freq << RADIO_FREQUENCY_FREQUENCY_Pos) & RADIO_FREQUENCY_FREQUENCY_Msk);
     NRF_RADIO->PACKETPTR = (uint32_t)test_frame;
-    NRF_RADIO->EVENTS_READY = 0x0;
-    NRF_RADIO->EVENTS_END = 0x0;
-    
-    uint32_t aa_address = 0x71764129;
     NRF_RADIO->BASE0 = aa_address << 8;
     NRF_RADIO->PREFIX0 = (0xffffff00 | aa_address >> 24);
     NRF_RADIO->TXADDRESS = 0;
     NRF_RADIO->RXADDRESSES = 1;
-#endif
-
     NRF_RADIO->MODECNF0= NRF_RADIO->MODECNF0 | 0x1F1F0000;
     NRF_RADIO->TIFS = 0x000000C0;
     NRF_RADIO->TXPOWER=0x0;
 }
 
+/**
+ * @brief Initializing TIMER4 to keep track of when the timeslot is about to end.
+ */
 void timer4_compare_init()
 {
     NRF_TIMER4->TASKS_STOP          = 1;
@@ -100,16 +95,9 @@ void timer4_compare_init()
     NRF_TIMER4->TASKS_START         = 1;
 }
 
-void timeslot_status_true()
-{
-    timed_out = false;
-}
-
-void timeslot_status_false()
-{
-    timed_out = true;
-}
-
+/**
+ * @brief Disables the radio and timer
+ */
 void end_rtt()
 {
     NRF_RADIO->TASKS_DISABLE = 1;
@@ -123,30 +111,50 @@ void end_rtt()
     NRF_TIMER4->EVENTS_COMPARE[0] = 0;
 }
 
+/**
+ * @brief Do RTT measurements
+ */
 void do_rtt_measurement(void)
 {
     volatile  uint32_t i;
-  
+
+    attempts = 0;
+
+    /* Initializinf the radio for RTT */
     nrf_radio_init();
+
+    /* Configure the timer */
     timer4_compare_init();
 
-    /* Setting radio in receive mode */
-    NRF_RADIO->TASKS_RXEN = 0x1;
-    NRF_RADIO->EVENTS_DISABLED = 0;
-    attempts = 0;
-    while ((attempts < NUMBER_OF_MEASUREMENTS) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
+    while (!(NRF_TIMER4->EVENTS_COMPARE[0]))
     {
         attempts++;
+
         nrf_gpio_pin_set(DATAPIN_4);
 
+        NRF_RADIO->PACKETPTR = (uint32_t)test_frame; /* Switch to rx buffer */
+
+        // Enable radio and wait for ready
+        NRF_RADIO->EVENTS_READY = 0U;
+        NRF_RADIO->TASKS_TXEN = 0;
+        NRF_RADIO->TASKS_RXEN = 1U;
+
         /* Wait for packet */
-        while ((NRF_RADIO->EVENTS_DISABLED == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
+        while ((NRF_RADIO->EVENTS_READY == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
         {
         }
-        NRF_RADIO->EVENTS_DISABLED = 0;
-        nrf_gpio_pin_clear(DATAPIN_4);
+
+        NRF_RADIO->EVENTS_END = 0U;
+
+        /* Start listening and wait for address received event */
+        NRF_RADIO->TASKS_START = 1U;
+        while ((NRF_RADIO->EVENTS_END == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
+        {
+        }
+
         /* Packet received, check CRC */
         rx_pkt_counter++;
+
         if(NRF_RADIO->CRCSTATUS>0)
         {
             /* CRC ok */
@@ -164,85 +172,46 @@ void do_rtt_measurement(void)
             for(i=2;i<4;i++)
                 response_test_frame[i]=0;
         }
-        
+
         /* Switch to Tx asap and send response packet back to initiator */
         NRF_RADIO->PACKETPTR = (uint32_t)response_test_frame; /* Switch to tx buffer */
         NRF_RADIO->TASKS_RXEN = 0x0;
-        //NRF_RADIO->TASKS_TXEN = 0x1;  /* Going via shortcut here */
-        
+        NRF_RADIO->EVENTS_READY = 0U;
+        NRF_RADIO->TASKS_TXEN   = 1;
+
         /* Wait for radio to be ready to transmit */
         while ((NRF_RADIO->EVENTS_READY == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
         {
         }
-        NRF_RADIO->EVENTS_READY = 0;
+
+        NRF_RADIO->EVENTS_END  = 0U;
+        NRF_RADIO->TASKS_START = 1U;
+
         /* Remove short DISABLED->TXEN before Tx ends */
         NRF_RADIO->SHORTS = (RADIO_SHORTS_READY_START_Enabled << RADIO_SHORTS_READY_START_Pos) |
-                                                (RADIO_SHORTS_END_DISABLE_Enabled << RADIO_SHORTS_END_DISABLE_Pos);
-        
+                            (RADIO_SHORTS_END_DISABLE_Enabled << RADIO_SHORTS_END_DISABLE_Pos);
+
         /* Wait for packet to be transmitted */
         while ((NRF_RADIO->EVENTS_END == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
         {
         }
-        NRF_RADIO->EVENTS_END = 0;	
 
-        /* Packet sent, disable radio */
+        // Disable radio
+        NRF_RADIO->EVENTS_DISABLED = 0U;
+        NRF_RADIO->TASKS_DISABLE = 1U;
+
         while ((NRF_RADIO->EVENTS_DISABLED == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
         {
         }
-        NRF_RADIO->EVENTS_DISABLED = 0;
-        
-        tx_pkt_counter++;
-        
-        /* Switch to Rx asap */
-        NRF_RADIO->PACKETPTR = (uint32_t)test_frame; /* Switch to rx buffer */
-        NRF_RADIO->TASKS_TXEN = 0x0;
-        NRF_RADIO->TASKS_RXEN = 0x1;
 
-        /* Enable radio */
-        while ((NRF_RADIO->EVENTS_READY == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
-        {
-        }
-        NRF_RADIO->EVENTS_READY = 0;
-        
-        /* Enable short DISABLED->TXEN before Rx goes to DISABLED */
         NRF_RADIO->SHORTS = (RADIO_SHORTS_READY_START_Enabled << RADIO_SHORTS_READY_START_Pos) |
-                        (RADIO_SHORTS_END_DISABLE_Enabled << RADIO_SHORTS_END_DISABLE_Pos) |
-                        (RADIO_SHORTS_DISABLED_TXEN_Enabled << RADIO_SHORTS_DISABLED_TXEN_Pos);
-    }
+                (RADIO_SHORTS_END_DISABLE_Enabled << RADIO_SHORTS_END_DISABLE_Pos) |
+                (RADIO_SHORTS_DISABLED_TXEN_Enabled << RADIO_SHORTS_DISABLED_TXEN_Pos);
+
+        tx_pkt_counter++;
+
+        nrf_gpio_pin_clear(DATAPIN_4);
+        }
 
     end_rtt();
-}
-
-
-void TIMER4_IRQHandler()
-{
-    
-}
-
-void HardFault_Handler(void)
-{
-    while (true)
-    {
-    }
-}
-
-void MemoryManagement_Handler(void)
-{
-    while (true)
-    {
-    }
-}
-
-void BusFault_Handler(void)
-{
-    while (true)
-    {
-    }
-}
-
-void UsageFault_Handler(void)
-{
-    while (true)
-    {
-    }
 }

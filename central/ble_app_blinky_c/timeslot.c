@@ -141,7 +141,6 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
                 // Schedule next timeslot
                 signal_callback_return_param.params.request.p_next = &m_timeslot_request;
                 signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
-                timeslot_status_false();
                 TIMESLOT_END_EGU->TASKS_TRIGGER[0] = 1;
                 nrf_gpio_pin_clear(DATAPIN_1);
             }
@@ -188,7 +187,6 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
             signal_callback_return_param.params.request.p_next = NULL;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
             nrf_gpio_pin_clear(DATAPIN_3);
-            timeslot_status_true();
             TIMESLOT_BEGIN_EGU->TASKS_TRIGGER[0] = 1;
             break;
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_FAILED:
