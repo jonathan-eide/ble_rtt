@@ -35,8 +35,8 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 #include <stdlib.h>
+#include "rtt_parameters.h"
 
-#define DATAPIN_4 NRF_GPIO_PIN_MAP(1, 12)
 #define NRF_GPIO NRF_P0
 
 #define NUMBER_OF_MEASUREMENTS 10
@@ -90,7 +90,7 @@ void timer4_compare_init()
     NRF_TIMER4->TASKS_CLEAR         = 1;
     NRF_TIMER4->MODE                = (TIMER_MODE_MODE_Timer << TIMER_MODE_MODE_Pos);
     NRF_TIMER4->EVENTS_COMPARE[0]   = 0;
-    NRF_TIMER4->CC[0]               = (35000UL);
+    NRF_TIMER4->CC[0]               = (DO_RTT_LENGTH_US);
     NRF_TIMER4->BITMODE             = (TIMER_BITMODE_BITMODE_24Bit << TIMER_BITMODE_BITMODE_Pos);
     NRF_TIMER4->PRESCALER           = 4;
     NRF_TIMER4->TASKS_START         = 1;

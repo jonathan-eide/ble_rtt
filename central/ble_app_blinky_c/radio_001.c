@@ -35,17 +35,15 @@
 #include "nrf_log_default_backends.h"
 #include <stdlib.h>
 #include "nrf_clock.h"
+#include "rtt_parameters.h"
 
 #define GPIO_NUMBER_LED0 13
 #define GPIO_NUMBER_LED1 14
-#define DATAPIN_4 NRF_GPIO_PIN_MAP(1, 12)
 
-#define CATCH_UP_DELAY_us 100
 #define DATABASE 0x20001000 /** Base address for measurement database */
 #define DATA_SIZE 128 
 #define NUM_BINS 128 
 #define NUMBER_OF_MEASUREMENTS 10
-#define TIMEOUT_IT 256
 #define TIMER2_PRESCALE_VAL 0
 
 static uint8_t test_frame[255] = {0x00, 0x04, 0xFF, 0xC1, 0xFB, 0xE8};
@@ -123,7 +121,7 @@ void timer4_compare_init()
     NRF_TIMER4->TASKS_CLEAR         = 1;
     NRF_TIMER4->MODE                = (TIMER_MODE_MODE_Timer << TIMER_MODE_MODE_Pos);
     NRF_TIMER4->EVENTS_COMPARE[0]   = 0;
-    NRF_TIMER4->CC[0]               = (35000UL);
+    NRF_TIMER4->CC[0]               = (DO_RTT_LENGTH_US);
     NRF_TIMER4->BITMODE             = (TIMER_BITMODE_BITMODE_24Bit << TIMER_BITMODE_BITMODE_Pos);
     NRF_TIMER4->PRESCALER           = 4;
     NRF_TIMER4->TASKS_START         = 1;
@@ -207,7 +205,7 @@ void do_rtt_measurement(void)
     memset(bincnt, 0, sizeof bincnt);
 
     /* Wait to make sure radio_002 is ready */
-    nrf_delay_us(CATCH_UP_DELAY_us);
+    nrf_delay_us(CATCH_UP_DELAY_US);
 
     while (!(NRF_TIMER4->EVENTS_COMPARE[0]))
     {

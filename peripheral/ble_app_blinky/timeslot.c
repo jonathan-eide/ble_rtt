@@ -11,10 +11,7 @@
 #include "nrf_error.h"
 #include "nrf_sdm.h"
 #include "radio_002.h"
-
-#define DATAPIN_1 NRF_GPIO_PIN_MAP(1, 3)
-#define DATAPIN_2 NRF_GPIO_PIN_MAP(1, 1)
-#define DATAPIN_3 NRF_GPIO_PIN_MAP(1, 10)
+#include "rtt_parameters.h"
 
 /* Constants for timeslot API */
 static nrf_radio_request_t  m_timeslot_request;
