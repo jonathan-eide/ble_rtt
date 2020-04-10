@@ -1,43 +1,3 @@
-/**
- * Copyright (c) 2014 - 2019, Nordic Semiconductor ASA
- *
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form, except as embedded into a Nordic
- *    Semiconductor ASA integrated circuit in a product or a software update for
- *    such product, must reproduce the above copyright notice, this list of
- *    conditions and the following disclaimer in the documentation and/or other
- *    materials provided with the distribution.
- *
- * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
- *    contributors may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
- *
- * 4. This software, with or without modification, must only be used with a
- *    Nordic Semiconductor ASA integrated circuit.
- *
- * 5. Any software provided in binary form under this license must not be reverse
- *    engineered, decompiled, modified and/or disassembled.
- *
- * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
- * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL NORDIC SEMICONDUCTOR ASA OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
- * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
-
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -54,15 +14,19 @@
 #include "ble_advertising.h"
 #include "ble_conn_params.h"
 #include "ble_db_discovery.h"
-#include "ble_lbs_c.h"
+#include "ble_rtt_c.h"
 #include "nrf_ble_gatt.h"
 #include "nrf_ble_scan.h"
-
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
-
 #include "radio_001.h"
+#include "timeslot.h"
+
+#define DATAPIN_1 NRF_GPIO_PIN_MAP(1, 3)
+#define DATAPIN_2 NRF_GPIO_PIN_MAP(1, 1)
+#define DATAPIN_3 NRF_GPIO_PIN_MAP(1, 10)
+#define DATAPIN_4 NRF_GPIO_PIN_MAP(1, 12)
 
 #define CENTRAL_SCANNING_LED            BSP_BOARD_LED_0                     /**< Scanning LED will be on when the device is scanning. */
 #define CENTRAL_CONNECTED_LED           BSP_BOARD_LED_1                     /**< Connected LED will be on when the device is connected. */
@@ -93,6 +57,7 @@ NRF_BLE_GQ_DEF(m_ble_gatt_queue,                                /**< BLE GATT Qu
 
 static char const m_target_periph_name[] = "Nordic_RTT";     /**< Name of the device we try to connect to. This name is searched in the scan report data*/
 
+uint32_t ts_time_total = 0;
 
 /**@brief Function to handle asserts in the SoftDevice.
  *
@@ -110,6 +75,14 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
     app_error_handler(0xDEADBEEF, line_num, p_file_name);
 }
 
+/**@brief Function for handling the LED Button Service client errors.
+ *
+ * @param[in]   nrf_error   Error code containing information about what went wrong.
+ */
+static void lbs_error_handler(uint32_t nrf_error)
+{
+    APP_ERROR_HANDLER(nrf_error);
+}
 
 /**@brief Function for handling the LED Button Service client errors.
  *
@@ -130,6 +103,15 @@ static void leds_init(void)
     bsp_board_init(BSP_INIT_LEDS);
 }
 
+/**@brief Function for the pins initialization.
+ */
+static void pins_init(void)
+{
+    nrf_gpio_cfg_output(DATAPIN_1);
+    nrf_gpio_cfg_output(DATAPIN_2);
+    nrf_gpio_cfg_output(DATAPIN_3);
+    nrf_gpio_cfg_output(DATAPIN_4);
+}
 
 /**@brief Function to start scanning.
  */
@@ -168,19 +150,6 @@ static void lbs_c_evt_handler(ble_lbs_c_t * p_lbs_c, ble_lbs_c_evt_t * p_lbs_c_e
             APP_ERROR_CHECK(err_code);
         } break; // BLE_LBS_C_EVT_DISCOVERY_COMPLETE
 
-        case BLE_LBS_C_EVT_BUTTON_NOTIFICATION:
-        {
-            NRF_LOG_INFO("Button state changed on peer to 0x%x.", p_lbs_c_evt->params.button.button_state);
-            if (p_lbs_c_evt->params.button.button_state)
-            {
-                bsp_board_led_on(LEDBUTTON_LED);
-            }
-            else
-            {
-                bsp_board_led_off(LEDBUTTON_LED);
-            }
-        } break; // BLE_LBS_C_EVT_BUTTON_NOTIFICATION
-
         default:
             // No implementation needed.
             break;
@@ -191,9 +160,8 @@ static void lbs_c_evt_handler(ble_lbs_c_t * p_lbs_c, ble_lbs_c_evt_t * p_lbs_c_e
 /**@brief Function for handling BLE events.
  *
  * @param[in]   p_ble_evt   Bluetooth stack event.
- * @param[in]   p_context   Unused.
  */
-static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
+static void ble_evt_handler(ble_evt_t const * p_ble_evt)
 {
     ret_code_t err_code;
 
@@ -217,6 +185,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             // peripherals to connect to.
             bsp_board_led_on(CENTRAL_CONNECTED_LED);
             bsp_board_led_off(CENTRAL_SCANNING_LED);
+            connected_enable();
         } break;
 
         // Upon disconnection, reset the connection handle of the peer which disconnected, update
@@ -225,6 +194,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
         {
             NRF_LOG_INFO("Disconnected.");
             scan_start();
+            connected_disable();
         } break;
 
         case BLE_GAP_EVT_TIMEOUT:
@@ -280,6 +250,20 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     }
 }
 
+/**@brief Function for dispatching a SoftDevice event to all modules with a SoftDevice 
+ *        event handler.
+ *
+ * @details This function is called from the SoftDevice event interrupt handler after a 
+ *          SoftDevice event has been received.
+ *
+ * @param[in] p_ble_evt  SoftDevice event.
+ * @param[in] p_context   Unused.
+ */
+static void ble_evt_dispatch(ble_evt_t const * p_ble_evt, void * p_context)
+{
+    ble_evt_handler(p_ble_evt);
+    nrf_evt_signal_handler((uint32_t) p_ble_evt->header.evt_id);
+}
 
 /**@brief LED Button client initialization.
  */
@@ -319,7 +303,7 @@ static void ble_stack_init(void)
     APP_ERROR_CHECK(err_code);
 
     // Register a handler for BLE events.
-    NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, ble_evt_handler, NULL);
+    NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, ble_evt_dispatch, NULL);
 }
 
 
@@ -331,7 +315,6 @@ static void ble_stack_init(void)
 static void button_event_handler(uint8_t pin_no, uint8_t button_action)
 {
     ret_code_t err_code;
-
     switch (pin_no)
     {
         case LEDBUTTON_BUTTON_PIN:
@@ -352,6 +335,7 @@ static void button_event_handler(uint8_t pin_no, uint8_t button_action)
             APP_ERROR_HANDLER(pin_no);
             break;
     }
+    request_next_event_earliest();
 }
 
 
@@ -373,7 +357,6 @@ static void scan_evt_handler(scan_evt_t const * p_scan_evt)
           break;
     }
 }
-
 
 
 /**@brief Function for initializing the button handler module.
@@ -501,6 +484,7 @@ int main(void)
     log_init();
     timer_init();
     leds_init();
+    pins_init();
     buttons_init();
     power_management_init();
     ble_stack_init();
@@ -508,6 +492,8 @@ int main(void)
     gatt_init();
     db_discovery_init();
     lbs_c_init();
+
+    timeslot_sd_init();
 
     // Start execution.
     NRF_LOG_INFO("Blinky CENTRAL example started.");
@@ -522,3 +508,8 @@ int main(void)
         idle_state_handle();
     }
 }
+
+
+// Source:
+// https://github.com/NordicPlayground/nrf51-ble-micro-esb-uart/blob/master/nRF5_SDK_11.0.0_89a8197/examples/ble_peripheral/ble_app_uart.ESB_Timeslot/main.c
+// https://devzone.nordicsemi.com/nordic/short-range-guides/b/software-development-kit/posts/setting-up-the-timeslot-api
