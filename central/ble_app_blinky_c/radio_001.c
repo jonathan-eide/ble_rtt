@@ -97,15 +97,11 @@ void nrf_radio_init(void)
  */
 void timer2_capture_init(uint32_t prescaler)
 {
-    NRF_RADIO->POWER                = (RADIO_POWER_POWER_Enabled << RADIO_POWER_POWER_Pos);
     NRF_TIMER2->MODE = TIMER_MODE_MODE_Timer;
     NRF_TIMER2->BITMODE = (TIMER_BITMODE_BITMODE_32Bit << TIMER_BITMODE_BITMODE_Pos);
     NRF_TIMER2->TASKS_STOP = 1;
     NRF_TIMER2->CC[0] = 0x0000;
     NRF_TIMER2->EVENTS_COMPARE[0] = 0;
-    NRF_TIMER2->EVENTS_COMPARE[1] = 0;
-    NRF_TIMER2->EVENTS_COMPARE[2] = 0;
-    NRF_TIMER2->EVENTS_COMPARE[3] = 0;
     NRF_TIMER2->TASKS_CLEAR = 1;
     NRF_TIMER2->SHORTS = 0;
     NRF_TIMER2->PRESCALER = prescaler << TIMER_PRESCALER_PRESCALER_Pos;
@@ -234,6 +230,8 @@ void do_rtt_measurement(void)
 
         /* Packet is sent */
         while ((NRF_RADIO->EVENTS_END == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
+        {
+        }
 
         tx_pkt_counter++;
         txcntw++;
@@ -291,7 +289,7 @@ void do_rtt_measurement(void)
                     /* Packet is good, update stats */
                     NRF_TIMER2->TASKS_STOP = 1;
                     telp = NRF_TIMER2->CC[0];  
-                    binNum = telp - 4613; /* Magic number to trim away dwell time in device B, etc */
+                    binNum = telp - 4150; /* Magic number to trim away dwell time in device B, etc */
                     
                     if((binNum >= 0) && (binNum < NUM_BINS))
                             bincnt[binNum]++;

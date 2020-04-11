@@ -145,6 +145,10 @@ void do_rtt_measurement(void)
         {
         }
 
+        NRF_RADIO->SHORTS = (RADIO_SHORTS_READY_START_Enabled << RADIO_SHORTS_READY_START_Pos) |
+                (RADIO_SHORTS_END_DISABLE_Enabled << RADIO_SHORTS_END_DISABLE_Pos) |
+                (RADIO_SHORTS_DISABLED_TXEN_Enabled << RADIO_SHORTS_DISABLED_TXEN_Pos);
+
         NRF_RADIO->EVENTS_END = 0U;
 
         /* Start listening and wait for address received event */
@@ -185,34 +189,22 @@ void do_rtt_measurement(void)
         {
         }
 
-        NRF_RADIO->EVENTS_END  = 0U;
-        NRF_RADIO->TASKS_START = 1U;
-
         /* Remove short DISABLED->TXEN before Tx ends */
         NRF_RADIO->SHORTS = (RADIO_SHORTS_READY_START_Enabled << RADIO_SHORTS_READY_START_Pos) |
                             (RADIO_SHORTS_END_DISABLE_Enabled << RADIO_SHORTS_END_DISABLE_Pos);
+
+        NRF_RADIO->EVENTS_END  = 0U;
+        NRF_RADIO->TASKS_START = 1U;
 
         /* Wait for packet to be transmitted */
         while ((NRF_RADIO->EVENTS_END == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
         {
         }
 
-        // Disable radio
-        NRF_RADIO->EVENTS_DISABLED = 0U;
-        NRF_RADIO->TASKS_DISABLE = 1U;
-
-        while ((NRF_RADIO->EVENTS_DISABLED == 0) && !(NRF_TIMER4->EVENTS_COMPARE[0]))
-        {
-        }
-
-        NRF_RADIO->SHORTS = (RADIO_SHORTS_READY_START_Enabled << RADIO_SHORTS_READY_START_Pos) |
-                (RADIO_SHORTS_END_DISABLE_Enabled << RADIO_SHORTS_END_DISABLE_Pos) |
-                (RADIO_SHORTS_DISABLED_TXEN_Enabled << RADIO_SHORTS_DISABLED_TXEN_Pos);
-
         tx_pkt_counter++;
 
         nrf_gpio_pin_clear(DATAPIN_4);
-        }
+    }
 
     end_rtt();
 }
