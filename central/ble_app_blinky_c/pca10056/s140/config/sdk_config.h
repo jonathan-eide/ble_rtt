@@ -1,7 +1,4 @@
 /**
- * Copyright (c) 2017 - 2019, Nordic Semiconductor ASA
- *
- /**
  * MIT License
  * 
  * Copyright (c) 2020 Martin Aalien
