@@ -39,8 +39,6 @@
 
 #define NRF_GPIO NRF_P0
 
-#define NUMBER_OF_MEASUREMENTS 10
-
 static uint32_t radio_freq = 78;
 static uint32_t attempts = 0;
 static uint8_t test_frame[256];

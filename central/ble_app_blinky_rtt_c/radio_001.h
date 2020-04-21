@@ -27,4 +27,6 @@
 
 void do_rtt_measurement(void);
 
+float calc_dist(void);
+
 #endif // RADIO_001_H
