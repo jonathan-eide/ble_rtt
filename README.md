@@ -14,11 +14,11 @@ The ranging algorithm is based on Round Trip Timing (RTT) and uses Time of Fligh
 3. You may need to edit the nRF5_SDK_16.0.0_98a08e2/components/toolchain/gcc/Makefile.posix so that it can find the GNU install root, version and prefix. 
 
 ### Flash devices
-1. Step in to central/ble_app_blinky_c/pca10056/s140/armgcc
+1. Step in to central/ble_app_blinky_rtt_c/pca10056/s140/armgcc
     - Connect the first nRF52840 DK to your computer
     - Run `make FLASH_SOFTDEVICE`
     - Run `make flash`
-2.  Step in to peripheral/ble_app_blinky/pca10056/s140/armgcc
+2.  Step in to peripheral/ble_app_blinky_rtt/pca10056/s140/armgcc
     - Connect the first nRF52840 DK to your computer
     - Run `make FLASH_SOFTDEVICE`
     - Run `make flash`
