@@ -22,8 +22,8 @@
  * SOFTWARE.
  */
 
-#define DATAPIN_1 NRF_GPIO_PIN_MAP(1, 3)  /* Debug pin 1 */
-#define DATAPIN_2 NRF_GPIO_PIN_MAP(1, 1)  /* Debug pin 2 */
+#define DATAPIN_1 NRF_GPIO_PIN_MAP(1, 1)  /* Debug pin 1 */
+#define DATAPIN_2 NRF_GPIO_PIN_MAP(1, 3)  /* Debug pin 2 */
 #define DATAPIN_3 NRF_GPIO_PIN_MAP(1, 10) /* Debug pin 3 */
 #define DATAPIN_4 NRF_GPIO_PIN_MAP(1, 12) /* Debug pin 4 */
 
