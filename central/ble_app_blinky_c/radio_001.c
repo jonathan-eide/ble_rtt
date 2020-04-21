@@ -41,6 +41,8 @@
 #define GPIO_NUMBER_LED1 14
 
 #define DATABASE 0x20001000 /** Base address for measurement database */
+#define AVG_DATABASE 0x20010000
+#define AVG_NUM_BINS 10
 #define DATA_SIZE 128 
 #define NUM_BINS 128 
 #define NUMBER_OF_MEASUREMENTS 10
@@ -58,8 +60,10 @@ static uint32_t rx_ignored = 0;
 static uint8_t rx_test_frame[256];
 static uint32_t highper=0;
 static uint32_t txcntw=0;
+//static uint32_t avg_counter=0;
 
 static uint32_t database[DATA_SIZE] __attribute__((section(".ARM.__at_DATABASE")));
+static float avg_database[AVG_NUM_BINS+1] __attribute__((section(".ARM.__at_AVG_DATABASE")));
 static uint32_t dbptr=0;
 static uint32_t bincnt[NUM_BINS];
 
@@ -321,4 +325,29 @@ void do_rtt_measurement(void)
         database[j] = bincnt[j];
         bincnt[j] = 0;
     }
+
+    
+    if (avg_database[0]+1 > AVG_NUM_BINS+1)
+    {
+        avg_database[0] = 1;
+    }
+    else
+    {
+        avg_database[0]++;
+    }
+
+    avg_database[(uint32_t) avg_database[0]] = calc_dist();
+
+    float sum = 0;
+    for (int i = 1; i < AVG_NUM_BINS+1; i++)
+    {
+        sum += avg_database[i];
+    }
+    float avg = sum/AVG_NUM_BINS;
+
+    if (avg_database[0] == AVG_NUM_BINS+1)
+    {
+        NRF_LOG_INFO(NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(avg));
+    }
+
 }
