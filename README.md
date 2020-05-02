@@ -1,8 +1,8 @@
-# Ranging with Round Trip Timing using Bluetooth Low Energy
+# Ranging by Round Trip Timing using Bluetooth Low Energy
 
 This project is created to do ranging measurements between two nRF52840 Development Kits. It is written as a part of a student project at Norges Teknisk-Naturvitenskapelige Universitet (NTNU) in collaboration with Nordic Semiconductor. 
 
-The ranging algorithm is based on Round Trip Timing (RTT) and uses Time of Flight calculations to estimate distance.
+The ranging algorithm is based on Round Trip Timing (RTT) and uses Time-of-Flight calculations to estimate distance.
 
 ## How to use
 
