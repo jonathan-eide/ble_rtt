@@ -40,7 +40,7 @@
 #define LED3 2
 #define LED4 3
 
-/* Constants for timeslot API */
+/* Variables for timeslot API */
 static nrf_radio_request_t  m_timeslot_request;
 static uint32_t             m_slot_length;
 static uint32_t             m_total_timeslot_length = 0;

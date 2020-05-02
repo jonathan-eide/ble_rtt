@@ -1,4 +1,4 @@
-# Ranging with Round Trip Timing using BluetoothLow Energy
+# Ranging with Round Trip Timing using Bluetooth Low Energy
 
 This project is created to do ranging measurements between two nRF52840 Development Kits. It is written as a part of a student project at Norges Teknisk-Naturvitenskapelige Universitet (NTNU) in collaboration with Nordic Semiconductor. 
 
@@ -26,6 +26,8 @@ The ranging algorithm is based on Round Trip Timing (RTT) and uses Time of Fligh
 When both DKs are powered on, they should connect. This is indicated by the DKs LED1 switches off and LED2 powers on. By pressing Button 1 on the central device the DKs will start performing RTT measurements. Both the DKs LED3 and LED4 will start blinking to indicate RTT measurements are performed. Also by pressing Button 1 on the central device will make LED3 light up. This can be hard to notice unless the RTT LED blinking is turned off. 
 
 To visualise and print the result one can add NRF_LOG_INFO at the end of the do_rtt_measurements function on the central side. The measurments can then be printed in a terminal window such as Putty.
+
+Be aware that this works for linux distros. For the project to build on windows, a few additional changes may be necessary. 
 
 ## License
 MIT License Copyright (c) 2020 Martin Aalien
