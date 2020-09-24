@@ -1,0 +1,32 @@
+{
+    "configurations": [
+        {
+            "name": "nRF52833 DK",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${env:GNU_GCC}/arm-none-eabi/include",
+                "${env:nRF_SDK}/modules/**",
+                "${env:nRF_SDK}/components/**",
+                "/home/jonathan/nordic/nRF5SDK160098a08e2/components/libraries/util",
+                "/home/jonathan/nordic/nRF5SDK160098a08e2/modules/nrfx/mdk"
+            ],
+            "defines": [
+                "BOARD_PCA10100",
+                "CONFIG_GPIO_AS_PINRESET",
+                "INITIALIZE_USER_SECTIONS",
+                "FLOAT_ABI_HARD",
+                "NRF52",
+                "NRF52833_XXAA",
+                "NRF_SD_BLE_API_VERSION=7",
+                "S140",
+                "SOFTDEVICE_PRESENT",
+                "SWI_DISABLE0"
+            ],
+            "compilerPath": "${env:GNU_GCC}/bin/arm-none-eabi-gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "clang-x64"
+        }
+    ],
+    "version": 4
+}
