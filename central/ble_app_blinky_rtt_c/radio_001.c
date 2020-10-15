@@ -36,6 +36,7 @@
 #include <stdlib.h>
 #include "nrf_clock.h"
 #include "rtt_parameters.h"
+#include <math.h>
 
 #define GPIO_NUMBER_LED0       13 /* Pin number for LED0 */
 #define GPIO_NUMBER_LED1       14 /* Pin number for LED1 */
@@ -58,6 +59,10 @@ static uint32_t txcntw=0;
 static uint32_t database[NUM_BINS] __attribute__((section(".ARM.__at_DATABASE")));
 static uint32_t dbptr=0;
 static uint32_t bincnt[NUM_BINS];
+
+volatile static int count_mean;
+volatile static float tot_mean_val;
+volatile static float calculated_distance;
 
 /**
  * @brief Initializes the radio
@@ -83,7 +88,7 @@ void nrf_radio_init(void)
     NRF_RADIO->FREQUENCY = (RADIO_FREQUENCY_MAP_Default << RADIO_FREQUENCY_MAP_Pos)  +
                          ((radio_freq << RADIO_FREQUENCY_FREQUENCY_Pos) & RADIO_FREQUENCY_FREQUENCY_Msk);
     NRF_RADIO->PACKETPTR = (uint32_t)test_frame;
-    NRF_RADIO->TXPOWER=0x0;
+    NRF_RADIO->TXPOWER=RADIO_TXPOWER_TXPOWER_Pos8dBm;
 }
 
 /**
@@ -320,6 +325,19 @@ void do_rtt_measurement(void)
         bincnt[j] = 0;
     }
 
-    /* Print the result. I suggest averaging more estimations before printing. */
-    // NRF_LOG_INFO(NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(calc_dist()));
+    calculated_distance = calc_dist();
+    if (!isnan(calculated_distance) && calculated_distance >= 0) {
+        count_mean++;
+        tot_mean_val += calculated_distance;
+    }
+
+    if (count_mean > 100) {
+        float mean_dist = (float) (tot_mean_val/(float)count_mean);
+
+        /* Print the result.*/
+        NRF_LOG_INFO(NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(mean_dist));
+
+        count_mean = 0;
+        tot_mean_val = 0;
+    }
 }
